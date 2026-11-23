@@ -21,6 +21,11 @@ export function runSteps(steps) {
     if (op === 'start') { t = v; lines.push(`Start with ${$(v)}${label ? ' ' + label : ''}.`); }
     else if (op === 'add') { t += v; lines.push(`Add ${$(v)} ${label} → ${$(t)}.`); }
     else if (op === 'sub') { t -= v; lines.push(`Subtract ${$(v)} ${label} → ${$(t)}.`); }
+    else if (op === 'min') {
+      const nt = Math.min(t, v);
+      lines.push(`Use the smaller of ${$(t)} and the ${$(v)} ${label} → ${$(nt)}.`);
+      t = nt;
+    }
     else if (op === 'subcap') {
       const used = Math.min(v, Math.max(t, 0));
       lines.push(used < v
@@ -69,7 +74,7 @@ T['inside-basis'] = {
       ask: 'Inside basis (the partnership\'s basis in the property)',
       facts: [[`${a} contributes equipment with an adjusted basis of`, $(ab)], ['Equipment fair market value', $(fmv)], [`${a} also contributes cash`, $(c)]],
       prompt: `What is the partnership's inside basis in the equipment?`,
-      steps: [['start', ab, `(${a}'s adjusted basis in the equipment carries over to the partnership)`]],
+      steps: [['start', ab, `adjusted basis of the equipment (carries over from ${a})`]],
       expect: ab,
       right: `The partnership takes the equipment with ${a}'s adjusted basis. Cash isn't part of the equipment's basis.`,
       wrong: [
@@ -195,7 +200,7 @@ T['four-numbers'] = {
     const ask = opt.variant || pick(Object.keys(FOUR));
     const steps = {
       ob: [['start', c, 'of cash'], ['add', ab, 'adjusted basis of the land'], ['sub', L, 'debt the partnership took over'], ['add', sh, `${a}'s ${share(n)} share of that debt as a partner`]],
-      ib: [['start', ab, `(${a}'s adjusted basis in the land carries over)`]],
+      ib: [['start', ab, `adjusted basis of the land (carries over from ${a})`]],
       book: [['start', c, 'of cash'], ['add', fmv, 'fair market value of the land'], ['sub', L, 'debt the partnership took over']],
       tax: [['start', c, 'of cash'], ['add', ab, 'adjusted basis of the land'], ['sub', L, 'debt the partnership took over']]
     }[ask];
@@ -241,7 +246,7 @@ T['loss-limit'] = {
     const ask = opt.variant || pick(['allowed', 'suspended', 'ending']);
     const base = { allowed: b, suspended: loss - b, ending: 0 };
     const steps = {
-      allowed: [['start', b, 'of outside basis (the most loss that can be deducted)']],
+      allowed: [['start', b, 'of outside basis'], ['min', loss, 'allocated loss']],
       suspended: [['start', loss, 'allocated loss'], ['sub', b, 'deductible this year (limited to basis)']],
       ending: [['start', b, 'of outside basis'], ['subcap', loss, 'the allocated loss']]
     }[ask];
@@ -477,6 +482,7 @@ export function makeQuestion(key, opt = {}) {
       notes: opts.map(o => ({ why: o.why, when: o.when || '' })),
       correct,
       explain: { rule: g.rule, keyFact: g.keyFact, steps: [...lines, `${g.ask} is ${money(ans)}.`], takeaway: g.takeaway },
+      work: buildWork(g, ans, key),
       source: { outline: 'Basis Math', heading: g.cite }, cite: g.cite
     };
   }
@@ -493,3 +499,112 @@ export function drillQueue(keys, count) {
 }
 
 export function newNumbers(q) { return q.template && T[q.template] ? makeQuestion(q.template, { variant: q.variant || undefined }) : null; }
+
+
+// ---------- Work the Math ----------
+// A question's calculation as tappable amounts: an optional starting balance the
+// question gives, then each dollar amount with the operation the rule calls for
+// ('add', 'sub', 'skip', or 'cap' = Use the Smaller Amount).
+const CAP_TEMPLATES = { 'loss-limit': 'subcap', 'distribution-over-basis': 'subcap', 'year-end': 'subcap' };
+
+function shortLabel(l) {
+  let t = String(l || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/^(of|the)\s+/i, '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/, but only.*$/, '');
+  if (!t) t = String(l || '').replace(/[()]/g, '').trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+const toNum = v => { const m = String(v).trim().match(/^(−|-)?\$([\d,]+)$/); return m ? (m[1] ? -1 : 1) * +m[2].replace(/,/g, '') : null; };
+
+export function whyFor(op, label, capMode) {
+  const l = String(label).toLowerCase();
+  if (op === 'cap') {
+    if (capMode === 'min') return 'The deductible loss is the smaller of the loss and outside basis, so use the smaller amount (§ 704(d)).';
+    if (/loss/.test(l)) return 'A loss can take basis only down to zero, so subtract the smaller of the loss and the basis left (§ 704(d)). Do this last, after increases and distributions.';
+    return 'Basis can\'t go below zero, so subtract only the smaller of this amount and the basis left; anything beyond basis is gain instead.';
+  }
+  if (op === 'skip') {
+    if (/fair market|fmv/.test(l)) return 'Fair market value isn\'t part of this number. It is used for the § 704(b) book capital account (and to measure built-in gain), not for basis.';
+    if (/adjusted basis/.test(l)) return 'This number uses fair market value, so the adjusted basis is left out.';
+    if (/debt|mortgage|liabilit/.test(l)) return 'Debt doesn\'t change this number. It matters for outside basis and the capital accounts, not for the property\'s own basis.';
+    if (/cash/.test(l)) return 'The cash is a separate contribution; it isn\'t part of this number.';
+    return 'The rule for this number doesn\'t use this amount.';
+  }
+  if (op === 'add') {
+    if (/tax-exempt/.test(l)) return 'Tax-exempt income increases basis too, so it isn\'t taxed again later.';
+    if (/income/.test(l)) return 'Allocated income increases basis even if no cash was paid out.';
+    if (/drop in debt|treated as cash/.test(l)) return 'A drop in debt share is treated as cash received, so it counts along with the actual cash.';
+    if (/share of that debt|share of the debt|share of partnership debt|increase in .*debt/.test(l)) return 'A partner\'s share of partnership debt counts as a cash contribution, so it increases basis.';
+    if (/took over|mortgage/.test(l)) return 'Start with the debt shifted off the contributor; the relief is measured from it.';
+    if (/fair market/.test(l)) return 'Book capital records contributed property at fair market value.';
+    if (/adjusted basis/.test(l)) return 'Contributed property brings its adjusted basis with it.';
+    if (/cash distributed|^cash$|cash$/.test(l) && !/contributed/.test(l)) return 'Start with the cash distributed; gain is measured by how far it exceeds basis.';
+    if (/cash/.test(l)) return 'Cash contributed adds to the total dollar for dollar.';
+    if (/allocated loss/.test(l)) return 'Start from the full loss to measure how much is left over.';
+    return 'The rule adds this amount.';
+  }
+  if (op === 'sub') {
+    if (/distribution/.test(l)) return 'Cash distributed reduces basis. Distributions come off before losses.';
+    if (/still bears|share/.test(l) && /debt|bears/.test(l)) return 'The contributor still bears this share as a partner, so it isn\'t relief.';
+    if (/took over|assumed/.test(l)) return 'Debt the partnership takes over is treated as cash paid to the partner, so it comes off.';
+    if (/decrease|drop|paydown/.test(l)) return 'A decrease in debt share is treated as a cash distribution, which reduces basis.';
+    if (/deductible/.test(l)) return 'The part of the loss covered by basis is deducted now; only the rest is suspended.';
+    if (/basis/.test(l)) return 'Basis is recovered tax-free first; only the excess is gain.';
+    return 'The rule subtracts this amount.';
+  }
+  return '';
+}
+
+function applyOp(t, op, v, capMode) {
+  if (op === 'add') return t + v;
+  if (op === 'sub') return t - v;
+  if (op === 'cap') return capMode === 'min' ? Math.min(t, v) : t - Math.min(v, Math.max(t, 0));
+  return t;
+}
+export function runWork(work, steps) {
+  let t = work.start ? work.start.v : 0;
+  const lines = [];
+  if (work.start) lines.push({ text: `Start with ${money(work.start.v)} (${work.start.label.toLowerCase()})`, total: t });
+  for (const s of steps) {
+    const it = work.items.find(i => i.id === s.id); if (!it) continue;
+    const before = t;
+    t = applyOp(t, s.op, it.v, work.capMode);
+    const text = s.op === 'add' ? `+ ${money(it.v)} ${it.label.toLowerCase()}`
+      : s.op === 'sub' ? `− ${money(it.v)} ${it.label.toLowerCase()}`
+      : s.op === 'cap' ? (work.capMode === 'min' ? `Smaller of ${money(before)} and ${money(it.v)} (${it.label.toLowerCase()})` : `− smaller of ${money(it.v)} and ${money(Math.max(before, 0))} (${it.label.toLowerCase()})`)
+      : `Skip ${money(it.v)} ${it.label.toLowerCase()}`;
+    lines.push({ text, total: t, skip: s.op === 'skip', id: it.id, op: s.op });
+  }
+  return { total: t, lines };
+}
+export function correctSteps(work) { return work.order.map(id => ({ id, op: work.items.find(i => i.id === id).op })); }
+
+function buildWork(g, ans, key) {
+  const st = g.steps;
+  if (st.slice(1).some(x => x[0] === 'start')) return null;                     // not a single running total
+  const capMode = st.some(x => x[0] === 'min') ? 'min' : st.some(x => x[0] === 'subcap') ? 'subcap' : (CAP_TEMPLATES[key] || null);
+  const given = st[0][0] === 'start' && /outside basis/i.test(st[0][2] || '');
+  const items = []; const order = []; let n = 0;
+  st.forEach((x, i) => {
+    if (i === 0 && given) return;
+    const [op, v, label] = x;
+    const o = op === 'start' || op === 'add' ? 'add' : op === 'sub' ? 'sub' : 'cap';
+    const it = { id: 'w' + n++, v: Math.round(v), label: shortLabel(label), op: o };
+    it.why = whyFor(o, label, capMode);
+    items.push(it); order.push(it.id);
+  });
+  const used = st.map(x => Math.round(x[1]));
+  g.facts.forEach(([lab, val]) => {
+    const v = toNum(val); if (v === null) return;
+    const k = used.indexOf(v);
+    if (k >= 0) { used.splice(k, 1); return; }
+    const it = { id: 'w' + n++, v, label: shortLabel(lab), op: 'skip' };
+    it.why = whyFor('skip', lab, capMode);
+    items.push(it); order.push(it.id);
+  });
+  const work = { start: given ? { v: Math.round(st[0][1]), label: shortLabel(st[0][2]) } : null, items, order, capMode };
+  if (Math.round(runWork(work, correctSteps(work)).total) !== Math.round(ans)) return null;   // must reproduce the answer
+  // Show the amounts in the order the facts list them, not in solving order.
+  const pos = it => { const i = g.facts.findIndex(f => toNum(f[1]) === it.v); return i < 0 ? 99 : i; };
+  work.items = items.slice().sort((a, b) => pos(a) - pos(b));
+  return work;
+}

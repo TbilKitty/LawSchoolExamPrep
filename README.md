@@ -23,6 +23,8 @@ Tap **Add to Memory Bank**, pick a PDF, Word (.docx), Markdown or text outline, 
 | **Mixed Practice** | AI mode | Multiple choice plus a short essay, with Basis Math added for Partnership Tax. |
 | **Practice Existing Questions** | A question bank | Your bank's questions with its own answer key. |
 
+**Work the Math** (optional, on Basis Math questions): the starting balance if the question gives one, then each dollar amount with large **+ Add**, **− Subtract** and **Skip** buttons (and **Use the Smaller Amount** for capped questions like the § 704(d) loss limit). Tap in any order; change a step, undo or reset; the running total updates as you go without saying whether you're right. After you answer, **My Calculation** and **Correct Calculation** appear side by side with the first step where they differ and why the rule adds, subtracts or leaves that amount out.
+
 **Quick 5** on the home screen starts five questions from the course you used last. Every generated set is saved under **Saved sets** to replay or review with all answers, offline. Leaving mid-set saves your place.
 
 After every multiple-choice answer you see the correct choice in full, why it's right, why your choice was wrong and when that reasoning would work, the rule in plain English, the fact that triggers it, the math or application, and the reference underneath. The other choices' explanations are under **Why the other choices are wrong**. A **Next Question** button sits under the explanation and stays in the bottom bar while you scroll.

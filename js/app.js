@@ -2,7 +2,7 @@ import { parseOutline } from './parse.js';
 import { keywordCheck } from './gen.js';
 import { playCoin, playBonk, moneyRain, inkSplat, speak, stopSpeaking, canSpeak } from './fx.js';
 import { testKey, aiMultipleChoice, aiEssayPrompt, aiGradeEssay } from './ai.js';
-import { DRILL_ID, DRILL_TOPICS, drillQueue, newNumbers } from './math.js';
+import { DRILL_ID, DRILL_TOPICS, drillQueue, newNumbers, money, runWork, correctSteps } from './math.js';
 import { kvGet, kvSet, fileGet, fileSet, fileDel, setPut, setDel, setAll, persist } from './db.js';
 
 // ---------------- storage ----------------
@@ -748,6 +748,7 @@ function mcBody(q) {
     ${q.assumption ? `<p class="small muted">${esc(q.assumption)}</p>` : ''}
     <p style="font-weight:700;font-size:1.08em">${esc(q.prompt)}</p>
     ${cloze}
+    ${q.work ? '<div id="work"></div>' : ''}
     <div id="choices">${q.choices.map((c, i) => `<button class="choice" data-i="${i}"><span class="choice-inner"><span class="letter">${L[i]}</span><span>${esc(c)}</span></span></button>`).join('')}</div>
     <div id="feedback" tabindex="-1"></div>`;
 }
@@ -809,6 +810,100 @@ function essayBody(q) {
     <div id="feedback" tabindex="-1"></div>`;
 }
 
+// ---------- Work the Math ----------
+// Optional scratch pad for calculation questions. It runs the steps you choose
+// and shows the running total, but never says whether they're right until you answer.
+const OPNAME = { add: '+ Add', sub: '− Subtract', skip: 'Skip', cap: 'Use the Smaller Amount' };
+function workState(q) {
+  session.work = session.work || {};
+  return (session.work[q.id] = session.work[q.id] || { steps: [], hist: [], editing: -1, open: false });
+}
+function workPanelHTML(q, w, locked) {
+  const work = q.work;
+  const run = runWork(work, w.steps);
+  const usedIds = new Set(w.steps.map(x => x.id));
+  const capHelp = work.capMode === 'min'
+    ? 'Use the Smaller Amount keeps whichever is smaller: your running total or this amount.'
+    : 'Use the Smaller Amount subtracts this amount or your running total, whichever is smaller, so the total stops at zero.';
+  const opBtns = (attr, id) => `<div class="wbtns">
+      <button class="wbtn add" ${attr}="add" data-id="${id}">+ Add</button>
+      <button class="wbtn sub" ${attr}="sub" data-id="${id}">− Subtract</button>
+      <button class="wbtn skp" ${attr}="skip" data-id="${id}">Skip</button>
+      ${work.capMode ? `<button class="wbtn cap" ${attr}="cap" data-id="${id}">Use the Smaller Amount</button>` : ''}
+    </div>`;
+  const items = work.items.map(it => {
+    const idx = w.steps.findIndex(x => x.id === it.id);
+    return `<div class="witem${idx >= 0 ? ' used' : ''}">
+      <div class="wtop"><span class="wlabel">${esc(it.label)}</span><span class="wamt">${money(it.v)}</span></div>
+      ${idx >= 0 ? `<p class="wchosen small">Step ${idx + 1}: ${OPNAME[w.steps[idx].op]}</p>` : locked ? '<p class="wchosen small muted">Not used</p>' : opBtns('data-op', it.id)}
+    </div>`;
+  }).join('');
+  const steps = run.lines.map((ln, i) => {
+    const k = work.start ? i - 1 : i;          // index into w.steps (the start line isn't a step)
+    if (k < 0) return `<li class="wstep start"><span>${esc(ln.text)}</span><b>${money(ln.total)}</b></li>`;
+    return `<li class="wstep${ln.skip ? ' skipped' : ''}"><span>${esc(ln.text)}</span><b>${ln.skip ? '' : '= ' + money(ln.total)}</b>
+      ${locked ? '' : (w.editing === k ? `<div class="wedit">${opBtns('data-chg', k)}<button class="btn ghost sm" data-rm="${k}">Remove this step</button></div>`
+        : `<button class="wlink" data-edit="${k}">Change</button>`)}</li>`;
+  }).join('');
+  const left = work.items.length - usedIds.size;
+  return `<details class="work"${w.open || w.steps.length ? ' open' : ''}>
+    <summary>Work the Math <span class="muted small">(optional)</span></summary>
+    <p class="small muted">Tap an amount's button in the order you'd do the math. The total updates as you go; you'll see how it compares after you answer.${work.capMode ? ' ' + capHelp : ''}</p>
+    ${work.start ? `<div class="wstart"><span>Starting balance: ${esc(work.start.label)}</span><b>${money(work.start.v)}</b></div>` : ''}
+    <div class="witems">${items}</div>
+    <div class="wsteps"><h3>My steps</h3>${steps ? `<ol>${steps}</ol>` : '<p class="small muted">No steps yet.</p>'}</div>
+    <div class="wtotal"><span>Running total</span><b>${money(run.total)}</b></div>
+    ${locked ? '' : `<div class="row wctl"><button class="btn sm" id="w-undo" ${w.hist.length ? '' : 'disabled'}>↶ Undo</button><button class="btn sm" id="w-reset" ${w.steps.length ? '' : 'disabled'}>Reset</button></div>`}
+    ${!locked && left === 0 && w.steps.length ? '<p class="small muted">Every amount is used. Pick your answer below.</p>' : ''}
+  </details>`;
+}
+function renderWork(q, locked) {
+  const box = document.getElementById('work'); if (!box || !q.work) return;
+  const w = workState(q);
+  box.innerHTML = workPanelHTML(q, w, locked);
+  const det = box.querySelector('details');
+  det.addEventListener('toggle', () => { w.open = det.open; save(K.session, session); });
+  if (locked) return;
+  const commit = fn => { w.hist.push(JSON.stringify(w.steps)); if (w.hist.length > 40) w.hist.shift(); fn(); w.editing = -1; save(K.session, session); renderWork(q, false); };
+  box.querySelectorAll('[data-op]').forEach(b => b.onclick = () => commit(() => w.steps.push({ id: b.dataset.id, op: b.dataset.op })));
+  box.querySelectorAll('[data-chg]').forEach(b => b.onclick = () => commit(() => { w.steps[+b.dataset.id].op = b.dataset.chg; }));
+  box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => commit(() => { w.steps.splice(+b.dataset.rm, 1); }));
+  box.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { w.editing = +b.dataset.edit; renderWork(q, false); });
+  const u = document.getElementById('w-undo'); if (u) u.onclick = () => { if (!w.hist.length) return; w.steps = JSON.parse(w.hist.pop()); w.editing = -1; save(K.session, session); renderWork(q, false); };
+  const r = document.getElementById('w-reset'); if (r) r.onclick = () => commit(() => { w.steps = []; });
+}
+// After answering: My Calculation vs Correct Calculation and the first place they differ.
+function workCompareHTML(q) {
+  const w = session.work && session.work[q.id];
+  if (!q.work || !w || !w.steps.length) return '';
+  const work = q.work;
+  const mine = runWork(work, w.steps), right = runWork(work, correctSteps(work));
+  const same = Math.round(mine.total) === Math.round(right.total);
+  const userOp = id => (w.steps.find(x => x.id === id) || {}).op || 'none';
+  let diff = null;
+  for (const id of work.order) {
+    const it = work.items.find(i => i.id === id), u = userOp(id), c = it.op;
+    if (u === c || (c === 'skip' && u === 'none')) continue;
+    if (same && ((u === 'sub' && c === 'cap') || (u === 'cap' && c === 'sub'))) continue;
+    diff = { it, u, c }; break;
+  }
+  const did = { add: 'added it', sub: 'subtracted it', skip: 'skipped it', cap: 'used the smaller amount', none: 'didn\'t use it' };
+  const calls = { add: 'adding it', sub: 'subtracting it', skip: 'leaving it out', cap: 'using the smaller amount' };
+  let verdict;
+  if (diff) verdict = `<p><b>First difference: ${esc(diff.it.label)} (${money(diff.it.v)}).</b> You ${did[diff.u]}; the rule calls for ${calls[diff.c]}.</p><p>${esc(diff.it.why)}</p>`;
+  else if (!same) verdict = '<p><b>Same amounts and operations, different order.</b> The order changes the result here: the Use the Smaller Amount step has to come last, after every increase and distribution, because the limit is measured against what\'s left at that point.</p>';
+  else verdict = '<p><b>Your calculation matches.</b></p>';
+  const list = (r, mark) => `<ol class="wcalc">${r.lines.map(l => `<li class="${l.skip ? 'skipped' : ''}${mark && diff && l.id === diff.it.id ? ' hit' : ''}"><span>${esc(l.text)}</span><b>${l.skip ? '' : money(l.total)}</b></li>`).join('')}</ol><p class="wsum">= <b>${money(r.total)}</b></p>`;
+  return `<div class="card work-compare">
+    <h2>Your math</h2>
+    <div class="wcols">
+      <div><h3>My Calculation</h3>${list(mine, true)}</div>
+      <div><h3>Correct Calculation</h3>${list({ ...right, lines: right.lines.concat(work.items.filter(i => i.op === 'skip').map(i => ({ text: `Skip ${money(i.v)} ${i.label.toLowerCase()}`, skip: true, id: i.id }))) }, true)}</div>
+    </div>
+    ${verdict}
+  </div>`;
+}
+
 function question() {
   if (!session || !session.queue || session.idx >= session.queue.length) { return `<p>No active session.</p>${dock('<button class="btn primary" data-go="home">Home</button>')}`; }
   const q = session.queue[session.idx];
@@ -862,7 +957,10 @@ bind.question = () => {
         if (i === q.correct) b.classList.add('correct');
         else if (i === chosen) b.classList.add('wrong');
       });
+      renderWork(q, true);
       document.getElementById('feedback').innerHTML = answerHTML(q, chosen, { live: true });
+      const cmp = workCompareHTML(q);
+      if (cmp) document.querySelector('#feedback > .card').insertAdjacentHTML('afterend', cmp);
       const notes = notesOf(q);
       const re = document.getElementById('read-exp');
       if (re) re.onclick = () => speak([`The answer is ${L[q.correct]}. ${q.choices[q.correct]}.`, notes[q.correct].why, (q.explain.rule || '').replace(/\[\[|\]\]/g, ''), ...(q.explain.steps || [q.explain.application || ''])].join(' '));
@@ -877,6 +975,7 @@ bind.question = () => {
       nextBtn();
     };
     if (prior) { lock(prior.chosen); return; }
+    renderWork(q, false);
     app.querySelectorAll('.choice').forEach(b => b.onclick = () => {
       const chosen = +b.dataset.i;
       const ok = chosen === q.correct;
@@ -887,7 +986,7 @@ bind.question = () => {
       const card = document.getElementById('qcard');
       if (ok) { if (settings.animations) moneyRain(card, { motion: motionOn() }); if (settings.sound) playCoin(); }
       else { if (settings.animations) inkSplat(card, { motion: motionOn() }); if (settings.sound && settings.wrongSound) playBonk(); }
-      setTimeout(() => document.getElementById('feedback').scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'start' }), motionOn() ? 650 : 0);
+      setTimeout(() => { const f = document.getElementById('feedback'); if (f) f.scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'start' }); }, motionOn() ? 650 : 0);
     });
   } else {
     const ta = document.getElementById('essay');

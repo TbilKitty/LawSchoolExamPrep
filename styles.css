@@ -283,3 +283,42 @@ details.txt > summary { font-weight: 600; }
 hr.sep { border: 0; border-top: 1px dashed var(--line); margin: 18px 0; }
 /* Leave room so the sticky bar never covers the end of an explanation. */
 body.answered main { padding-bottom: calc(260px + var(--safe-b)); }
+
+/* ---------- Work the Math ---------- */
+details.work { background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; padding: 4px 12px 12px; margin: 4px 0 14px; }
+details.work > summary { font-size: 1.02em; color: var(--gold-2); }
+.wstart, .wtotal { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card-2); margin: 8px 0; }
+.wtotal { position: sticky; top: 64px; z-index: 2; border: 1px solid var(--gold); }
+.wtotal b, .wstart b { font-size: 1.15em; color: var(--gold-2); white-space: nowrap; }
+.witem { border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin: 0 0 10px; background: var(--card); }
+.witem.used { opacity: .75; }
+.wtop { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.wlabel { font-weight: 600; }
+.wamt { font-weight: 800; color: var(--gold-2); white-space: nowrap; }
+.wbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.wbtn { min-height: 54px; border-radius: 12px; border: 1px solid var(--line); background: var(--card-2); color: var(--text); font: inherit; font-weight: 800; font-size: .95em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.wbtn:active { transform: scale(.97); }
+.wbtn.add { border-color: #3f8f6a; }
+.wbtn.sub { border-color: #8a3b4d; }
+.wbtn.cap { grid-column: 1 / -1; border-color: #6c74c9; }
+.wchosen { margin: 0; color: var(--gold-2); }
+.wsteps h3 { font-size: .8em; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 12px 0 4px; }
+.wsteps ol, ol.wcalc { margin: 0; padding-left: 1.3em; }
+.wstep, ol.wcalc li { margin-bottom: 8px; }
+.wstep > span, ol.wcalc li > span { margin-right: 6px; }
+.wstep > b, ol.wcalc li > b { color: var(--gold-2); white-space: nowrap; }
+.wstep.start { list-style: none; margin-left: -1.3em; }
+.wstep.skipped, ol.wcalc li.skipped { color: var(--muted); }
+.wlink { background: none; border: 0; color: #bcd3ff; text-decoration: underline; font: inherit; font-size: .85em; padding: 6px 4px; min-height: 36px; cursor: pointer; }
+.wedit { margin: 6px 0 4px; }
+.wedit .btn { margin-top: 8px; }
+.wctl .btn { margin: 0; }
+.work-compare .wcols { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 560px) { .work-compare .wcols { grid-template-columns: 1fr 1fr; } }
+.work-compare h3 { font-size: .8em; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+ol.wcalc li.hit { background: var(--bad-bg); border-radius: 8px; padding: 2px 6px; }
+.wsum { margin: 4px 0 8px; }
+.facts td:last-child { white-space: normal; overflow-wrap: anywhere; max-width: 55%; }
+.facts td:first-child { overflow-wrap: anywhere; }
+.wbtns { grid-template-columns: 1fr 1.3fr 1fr; }
+.wbtn { white-space: nowrap; padding: 0 6px; }
