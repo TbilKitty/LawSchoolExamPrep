@@ -1,0 +1,111 @@
+{
+  "format": "lsep-pack-1",
+  "title": "Four Accounts",
+  "subject": "Partnership Tax",
+  "note": "Starter pack. Rules come from the Code and Treasury Regulations, not from your outline. All facts are practice hypotheticals.",
+  "questions": [
+    {
+      "id": "fa1", "type": "mc", "topic": "Book capital account",
+      "hypothetical": true,
+      "facts": [["Ana contributes land, basis", "$30,000"], ["Land FMV", "$50,000"], ["Debt", "None"]],
+      "prompt": "What is Ana's § 704(b) book capital account right after the contribution?",
+      "choices": ["$30,000", "$50,000", "$20,000", "$0"],
+      "correct": 1,
+      "explain": {
+        "rule": "A partner's book capital account is credited with cash plus the fair market value of contributed property, net of liabilities the partnership takes on. Treas. Reg. § 1.704-1(b)(2)(iv)(b).",
+        "application": "Ana contributed land worth $50,000 with no debt, so her book capital account starts at $50,000.",
+        "takeaway": "Only the book account sees FMV."
+      },
+      "whyWrong": ["$30,000 is Ana's basis. It drives outside basis and tax capital, not book capital.", null, "$20,000 is the built-in gain (FMV − basis), not an account balance.", "Contributing property creates capital. Nothing here reduces it to zero."],
+      "source": { "outline": "Starter pack", "heading": "Treas. Reg. § 1.704-1(b)(2)(iv)(b)" }
+    },
+    {
+      "id": "fa2", "type": "mc", "topic": "Tax capital account",
+      "hypothetical": true,
+      "facts": [["Ana contributes land, basis", "$30,000"], ["Land FMV", "$50,000"], ["Debt", "None"]],
+      "prompt": "What is Ana's tax-basis capital account right after the contribution?",
+      "choices": ["$50,000", "$20,000", "$30,000", "$80,000"],
+      "correct": 2,
+      "explain": {
+        "rule": "The tax capital account starts with cash plus the adjusted tax basis of contributed property, net of liabilities the partnership takes on.",
+        "application": "Ana's land has a $30,000 basis and no debt, so tax capital is $30,000.",
+        "takeaway": "Tax capital tracks basis; book capital tracks FMV."
+      },
+      "whyWrong": ["$50,000 is FMV. That belongs in the book capital account.", "$20,000 is the built-in gain, the gap between book and tax capital.", null, "There's no reason to add basis and FMV together."],
+      "source": { "outline": "Starter pack", "heading": "Tax capital (Form 1065 reporting)" }
+    },
+    {
+      "id": "fa3", "type": "mc", "topic": "Outside and inside basis",
+      "hypothetical": true,
+      "facts": [["Ana contributes land, basis", "$30,000"], ["Land FMV", "$50,000"], ["Debt", "None"]],
+      "prompt": "What are Ana's outside basis and the partnership's inside basis in the land?",
+      "choices": ["Outside $30,000; inside $30,000", "Outside $50,000; inside $30,000", "Outside $0; inside $30,000", "Outside $30,000; inside $50,000"],
+      "correct": 0,
+      "explain": {
+        "rule": "§ 722: the partner's outside basis equals the cash plus the adjusted basis of property contributed. § 723: the partnership takes the contributor's basis in the property (carryover basis).",
+        "application": "Both start from Ana's $30,000 basis. With no debt, there's no § 752 adjustment.",
+        "takeaway": "§ 722 is the partner's basis; § 723 is the partnership's basis. Both use the contributor's basis."
+      },
+      "whyWrong": [null, "Outside basis uses Ana's basis, not FMV.", "Contributing property gives Ana basis equal to her basis in the property; she doesn't start at zero.", "§ 723 gives the partnership carryover basis, not FMV."],
+      "source": { "outline": "Starter pack", "heading": "§§ 722, 723" }
+    },
+    {
+      "id": "fa4", "type": "mc", "topic": "Built-in gain",
+      "hypothetical": true,
+      "facts": [["Ana's book capital", "$50,000"], ["Ana's tax capital", "$30,000"]],
+      "prompt": "What is the $20,000 difference between Ana's book and tax capital accounts?",
+      "choices": ["Gain Ana recognizes when she contributes the land", "The partnership's inside basis in the land", "§ 704(c) built-in gain that must be allocated to Ana when the land is sold", "Ana's share of partnership liabilities"],
+      "correct": 2,
+      "explain": {
+        "rule": "§ 721(a): no gain is recognized on contributing property. § 704(c)(1)(A): income, gain, loss and deduction on contributed property are shared so the contributing partner bears the precontribution gain or loss.",
+        "application": "The $20,000 isn't taxed at contribution. It stays with the land and goes to Ana when the partnership sells it.",
+        "takeaway": "Book minus tax capital at contribution = § 704(c) built-in gain."
+      },
+      "whyWrong": ["§ 721(a) gives nonrecognition. Nothing is taxed when Ana contributes.", "Inside basis is $30,000 under § 723.", null, "There's no debt in these facts, and debt never goes in either capital account."],
+      "source": { "outline": "Starter pack", "heading": "§§ 721(a), 704(c)(1)(A)" }
+    },
+    {
+      "id": "fa5", "type": "mc", "topic": "Debt and the accounts",
+      "hypothetical": true,
+      "facts": [["Ben contributes cash", "$10,000"], ["Partnership then borrows (recourse)", "$30,000"], ["Ben's share of that debt", "$15,000"]],
+      "assumption": "Assume Ben's $15,000 share is already correct under § 752 and Treas. Reg. § 1.752-2.",
+      "prompt": "What are Ben's outside basis and his book capital account?",
+      "choices": ["Outside $10,000; book $10,000", "Outside $25,000; book $25,000", "Outside $25,000; book $10,000", "Outside $40,000; book $10,000"],
+      "correct": 2,
+      "explain": {
+        "rule": "§ 752(a): an increase in a partner's share of partnership liabilities is treated as a cash contribution, which raises outside basis under § 722. Liabilities are not credited to capital accounts.",
+        "application": "Ben's $15,000 debt share is added to his $10,000 cash for outside basis ($25,000). His book capital stays at the $10,000 he contributed.",
+        "takeaway": "Debt raises outside basis only."
+      },
+      "whyWrong": ["This leaves out Ben's $15,000 debt share, which § 752(a) adds to outside basis.", "Debt doesn't go in the capital account.", null, "Ben's share is $15,000, not the full $30,000."],
+      "source": { "outline": "Starter pack", "heading": "§ 752(a)" }
+    },
+    {
+      "id": "fa6", "type": "mc", "topic": "Annual basis adjustments",
+      "hypothetical": true,
+      "facts": [["Dee's outside basis, start of year", "$20,000"], ["Dee's share of tax-exempt interest", "$3,000"], ["Dee's share of nondeductible expenses", "$1,000"]],
+      "assumption": "No other items, no distributions, no change in liabilities.",
+      "prompt": "What is Dee's outside basis at year-end?",
+      "choices": ["$20,000", "$23,000", "$24,000", "$22,000"],
+      "correct": 3,
+      "explain": {
+        "rule": "§ 705(a)(1)(B) increases outside basis by the partner's share of tax-exempt income. § 705(a)(2)(B) decreases it by the share of expenditures that are not deductible and not capital expenditures.",
+        "application": "$20,000 + $3,000 − $1,000 = $22,000.",
+        "takeaway": "Tax-exempt income goes up, nondeductible expenses go down, so they stay tax-neutral later."
+      },
+      "whyWrong": ["Both items adjust basis even though neither shows up in taxable income.", "This misses the $1,000 decrease for nondeductible expenses.", "Nondeductible expenses reduce basis; they aren't added.", null],
+      "source": { "outline": "Starter pack", "heading": "§ 705(a)" }
+    },
+    {
+      "id": "fa-e1", "type": "essay", "topic": "Four accounts at formation",
+      "hypothetical": true,
+      "prompt": "Practice hypothetical: Cole contributes equipment with a $40,000 basis and a $70,000 FMV. Dee contributes $70,000 cash. They form a 50/50 partnership, and there is no debt. State Cole's outside basis, the partnership's inside basis in the equipment, Cole's book capital account and Cole's tax capital account. Explain why each is what it is, and whether Cole recognizes any gain.",
+      "rubric": {
+        "issues": ["Gain on contribution", "Cole's outside basis", "Partnership's inside basis", "Book vs. tax capital", "Built-in gain"],
+        "keyTerms": ["§ 721", "§ 722", "§ 723", "§ 704(b)", "§ 704(c)", "$40,000", "$70,000", "$30,000", "fair market value", "carryover"],
+        "model": "Issue: What are Cole's four accounts after formation, and is gain recognized? Rule: § 721(a) gives no gain or loss on a contribution. § 722: outside basis = basis of property contributed. § 723: the partnership takes carryover basis. The book capital account credits FMV (Treas. Reg. § 1.704-1(b)(2)(iv)(b)); tax capital credits basis. Application: Cole recognizes no gain. Outside basis $40,000; inside basis $40,000; book capital $70,000; tax capital $40,000. The $30,000 gap is § 704(c) built-in gain. Conclusion: no gain now; the $30,000 will be allocated to Cole under § 704(c) when the equipment is sold (and affects depreciation allocations meanwhile)."
+      },
+      "source": { "outline": "Starter pack", "heading": "§§ 721–723, 704(b), 704(c)" }
+    }
+  ]
+}

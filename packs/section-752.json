@@ -1,0 +1,131 @@
+{
+  "format": "lsep-pack-1",
+  "title": "§ 752 Debt",
+  "subject": "Partnership Tax",
+  "note": "Starter pack. Rules come from the Code and Treasury Regulations, not from your outline. All facts are practice hypotheticals.",
+  "questions": [
+    {
+      "id": "d1", "type": "mc", "topic": "Contributed property subject to debt",
+      "hypothetical": true,
+      "facts": [["Ben contributes a building, basis", "$60,000"], ["Building FMV", "$100,000"], ["Recourse mortgage (partnership takes it over)", "$40,000"], ["Cara contributes cash", "$60,000"]],
+      "assumption": "50/50 general partners who share losses equally, so each bears half the economic risk of loss on the mortgage.",
+      "prompt": "What is Ben's outside basis, and does he recognize gain?",
+      "choices": ["$60,000; no gain", "$20,000; no gain", "$40,000; no gain", "$0; $20,000 gain"],
+      "correct": 2,
+      "explain": {
+        "rule": "§ 752(b): a decrease in a partner's individual liabilities because the partnership assumes them is a deemed cash distribution. § 752(a): an increase in his share of partnership liabilities is a deemed cash contribution. Treas. Reg. § 1.752-1(f) nets the two.",
+        "application": "$60,000 basis − $40,000 relieved + $20,000 share (50%) = $40,000. The net decrease is $20,000, which is less than his $60,000 basis, so § 731(a)(1) triggers no gain.",
+        "takeaway": "Subtract the full debt, then add back your share."
+      },
+      "whyWrong": ["This ignores the $40,000 of debt relief entirely.", "This subtracts the debt but never adds back Ben's $20,000 share under § 752(a).", null, "Gain arises only if the net deemed distribution ($20,000) exceeds basis ($60,000). It doesn't."],
+      "source": { "outline": "Starter pack", "heading": "§ 752(a), (b); Treas. Reg. § 1.752-1(f)" }
+    },
+    {
+      "id": "d2", "type": "mc", "topic": "Non-contributing partner's debt share",
+      "hypothetical": true,
+      "facts": [["Same facts: Cara contributes cash", "$60,000"], ["Mortgage the partnership took over", "$40,000"]],
+      "assumption": "Each partner bears half the economic risk of loss on the mortgage.",
+      "prompt": "What is Cara's outside basis?",
+      "choices": ["$60,000", "$80,000", "$100,000", "$40,000"],
+      "correct": 1,
+      "explain": {
+        "rule": "§ 722 gives Cara basis equal to the cash she contributed. § 752(a) treats her increased share of partnership liabilities as a further cash contribution.",
+        "application": "$60,000 cash + $20,000 share of the mortgage = $80,000.",
+        "takeaway": "Every partner who picks up a debt share gets a basis increase, not just the contributor."
+      },
+      "whyWrong": ["This misses Cara's $20,000 share of the mortgage.", null, "Cara picks up only her share ($20,000), not the full $40,000.", "Cara isn't relieved of any debt; her basis can't go below her cash contribution here."],
+      "source": { "outline": "Starter pack", "heading": "§§ 722, 752(a)" }
+    },
+    {
+      "id": "d3", "type": "mc", "topic": "Gain from debt relief",
+      "hypothetical": true,
+      "facts": [["Gus contributes property, basis", "$10,000"], ["Property FMV", "$50,000"], ["Recourse debt on the property", "$30,000"], ["Hana contributes cash", "$20,000"]],
+      "assumption": "50/50 partnership; each partner bears half the economic risk of loss on the debt.",
+      "prompt": "How much gain does Gus recognize, and what is his outside basis afterward?",
+      "choices": ["No gain; outside basis $10,000", "$5,000 gain; outside basis $0", "$20,000 gain; outside basis $0", "$15,000 gain; outside basis $0"],
+      "correct": 1,
+      "explain": {
+        "rule": "Under § 752(b) and Treas. Reg. § 1.752-1(f), the net decrease in a partner's liabilities is a deemed cash distribution. Under § 731(a)(1), cash in excess of outside basis is gain from the sale of a partnership interest.",
+        "application": "Relieved of $30,000; picks up $15,000. Net deemed distribution is $15,000 against a $10,000 basis, which gives $5,000 of gain and leaves basis at $0.",
+        "takeaway": "Net debt relief over basis = gain. Basis never goes below zero."
+      },
+      "whyWrong": ["The $15,000 net deemed distribution exceeds Gus's $10,000 basis, so there is gain.", null, "$20,000 would be relief over basis without adding back Gus's $15,000 share.", "$15,000 is the net deemed distribution, not the gain. Gain is the excess over basis."],
+      "source": { "outline": "Starter pack", "heading": "§§ 752(b), 731(a)(1)" }
+    },
+    {
+      "id": "d4", "type": "mc", "topic": "Recourse debt: constructive liquidation",
+      "hypothetical": true,
+      "facts": [["A contributes cash", "$60,000"], ["B contributes cash", "$40,000"], ["Partnership borrows (recourse)", "$100,000"], ["Partnership buys a building for", "$200,000"]],
+      "assumption": "General partnership; losses shared 60% A / 40% B; partners must restore deficits under state law.",
+      "prompt": "What is A's share of the $100,000 recourse liability?",
+      "choices": ["$50,000", "$60,000", "$100,000", "$40,000"],
+      "correct": 1,
+      "explain": {
+        "rule": "A partner's share of a recourse liability equals the economic risk of loss he bears, measured by a constructive liquidation: all assets are treated as worthless, the loss is allocated, and the partner with a deficit would have to pay it. Treas. Reg. § 1.752-2(b).",
+        "application": "The $200,000 loss is split 60/40. A's capital: $60,000 − $120,000 = −$60,000. B's: $40,000 − $80,000 = −$40,000. A would pay $60,000.",
+        "takeaway": "Recourse debt follows who pays in a worst-case liquidation."
+      },
+      "whyWrong": ["Recourse debt isn't split per capita; it follows economic risk of loss.", null, "A bears only his deficit, not the whole debt.", "$40,000 is B's share."],
+      "source": { "outline": "Starter pack", "heading": "Treas. Reg. § 1.752-2(b)" }
+    },
+    {
+      "id": "d5", "type": "mc", "topic": "Nonrecourse debt: three tiers",
+      "hypothetical": true,
+      "facts": [["A contributes property, basis", "$20,000"], ["Property FMV", "$100,000"], ["Nonrecourse debt on the property", "$50,000"], ["B contributes cash", "$50,000"]],
+      "assumption": "50/50 partnership; tier 3 follows profit shares; § 704(c) traditional method.",
+      "prompt": "What is A's share of the $50,000 nonrecourse liability right after formation?",
+      "choices": ["$25,000", "$50,000", "$40,000", "$30,000"],
+      "correct": 2,
+      "explain": {
+        "rule": "Treas. Reg. § 1.752-3(a): tier 1 = share of partnership minimum gain; tier 2 = the § 704(c) gain the partner would get if the property were sold for the debt; tier 3 = the rest, by profit shares.",
+        "application": "Tier 1: debt $50,000 − book value $100,000 → $0. Tier 2: a sale for $50,000 gives $30,000 of tax gain, all to A under § 704(c) → $30,000. Tier 3: remaining $20,000 split 50/50 → $10,000. A's share = $40,000.",
+        "takeaway": "Tier 2 shifts nonrecourse debt toward the partner with built-in gain."
+      },
+      "whyWrong": ["$25,000 skips tier 2 and splits everything 50/50.", "A doesn't get the whole liability; tier 3 gives B part of it.", null, "$30,000 is only tier 2; it leaves out A's tier 3 share."],
+      "source": { "outline": "Starter pack", "heading": "Treas. Reg. § 1.752-3(a)" }
+    },
+    {
+      "id": "d6", "type": "mc", "topic": "Sale of an interest: debt relief",
+      "hypothetical": true,
+      "facts": [["Ivy sells her interest for cash", "$30,000"], ["Ivy's share of partnership liabilities", "$20,000"], ["Ivy's outside basis (includes debt share)", "$35,000"]],
+      "assumption": "No hot assets.",
+      "prompt": "What is Ivy's gain or loss on the sale?",
+      "choices": ["$5,000 loss", "$15,000 gain", "$30,000 gain", "$50,000 gain"],
+      "correct": 1,
+      "explain": {
+        "rule": "§ 752(d): liabilities are treated as in a sale of property not associated with partnerships, so the seller's amount realized includes the liabilities she is relieved of (Treas. Reg. § 1.1001-2). Gain is capital under § 741 absent § 751 assets.",
+        "application": "Amount realized $30,000 + $20,000 = $50,000. Gain = $50,000 − $35,000 = $15,000.",
+        "takeaway": "Debt relief is part of the price."
+      },
+      "whyWrong": ["This leaves debt relief out of the amount realized while keeping it in basis.", null, "This ignores Ivy's $35,000 basis.", "$50,000 is the amount realized, not the gain."],
+      "source": { "outline": "Starter pack", "heading": "§§ 752(d), 741" }
+    },
+    {
+      "id": "d7", "type": "mc", "topic": "Paying down debt",
+      "hypothetical": true,
+      "facts": [["Jo's outside basis", "$5,000"], ["Partnership pays down a recourse loan; Jo's share falls by", "$8,000"]],
+      "assumption": "No other items this year.",
+      "prompt": "What happens to Jo?",
+      "choices": ["Nothing; debt changes don't affect partners", "Outside basis becomes −$3,000", "$3,000 gain; outside basis $0", "$8,000 gain; outside basis $5,000"],
+      "correct": 2,
+      "explain": {
+        "rule": "§ 752(b): a decrease in a partner's share of partnership liabilities is a deemed cash distribution. § 731(a)(1): cash over basis is gain; § 733 reduces basis, but not below zero.",
+        "application": "Deemed distribution $8,000 against $5,000 basis gives $3,000 of gain; basis goes to $0.",
+        "takeaway": "Shrinking your debt share is like getting cash."
+      },
+      "whyWrong": ["§ 752(b) treats the decrease as a cash distribution.", "Outside basis can't go below zero; the excess is gain.", null, "Only the excess over basis ($3,000) is gain, and basis drops to $0."],
+      "source": { "outline": "Starter pack", "heading": "§§ 752(b), 731(a)(1), 733" }
+    },
+    {
+      "id": "d-e1", "type": "essay", "topic": "Contribution of encumbered property",
+      "hypothetical": true,
+      "prompt": "Practice hypothetical: Gus contributes property with a $10,000 basis and a $50,000 FMV, subject to a $30,000 recourse debt the partnership assumes. Hana contributes $20,000 cash. They are 50/50 partners and each bears half the economic risk of loss on the debt. Analyze the tax consequences to Gus and to Hana: gain recognized, character, and each partner's outside basis. Also give Gus's book and tax capital accounts.",
+      "rubric": {
+        "issues": ["Nonrecognition on contribution", "Debt shift for Gus", "Gain from excess debt relief", "Hana's basis increase", "Capital accounts"],
+        "keyTerms": ["§ 721", "§ 722", "§ 752(a)", "§ 752(b)", "§ 731", "§ 733", "$5,000", "$15,000", "$35,000", "economic risk of loss"],
+        "model": "Issue: Does the debt shift trigger gain, and what are the partners' bases? Rule: § 721 nonrecognition; § 722 basis; § 752(b) relief of liabilities = deemed distribution; § 752(a) increase = deemed contribution; Treas. Reg. § 1.752-1(f) netting; § 731(a)(1) gain when deemed cash exceeds basis; § 733 basis reduction. Application: Gus is relieved of $30,000 and picks up $15,000, a net $15,000 deemed distribution against a $10,000 basis, giving $5,000 of gain (treated as gain from sale of his partnership interest, generally capital) and $0 outside basis. Hana: $20,000 cash + $15,000 debt share = $35,000. Gus's book capital: $50,000 − $30,000 = $20,000; tax capital: $10,000 − $30,000 = −$20,000. Outside basis ($0) is $5,000 more than tax capital plus his debt share (−$20,000 + $15,000 = −$5,000) because Gus recognized $5,000 of gain. Conclusion: Gus recognizes $5,000 of gain and has $0 basis; Hana recognizes nothing and has $35,000 basis."
+      },
+      "source": { "outline": "Starter pack", "heading": "§§ 721, 722, 752, 731" }
+    }
+  ]
+}

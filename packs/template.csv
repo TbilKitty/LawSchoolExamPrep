@@ -1,0 +1,2 @@
+topic,facts,assumption,question,A,B,C,D,correct,rule,application,takeaway,whyA,whyB,whyC,whyD,source_heading,source_page
+Formation + debt,"Basis $60,000; FMV $100,000; recourse mortgage $40,000","50/50, equal risk of loss",What is Ben's outside basis?,"$60,000","$20,000","$40,000","$0",C,"§ 722 basis, adjusted under § 752(a) and (b)","$60,000 − $40,000 relief + $20,000 share = $40,000",Subtract the full debt; add back your share,Ignores the debt relief,Forgets to add back Ben's share,,Gain only if net relief exceeds basis,§ 752,
