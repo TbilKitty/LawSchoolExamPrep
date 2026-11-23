@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f4e79">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Basis Calc">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>Partnership Tax Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f4ef; --card:#fff; --ink:#1d2430; --muted:#5d6675; --line:#dcd8cf;
+  --accent:#1f4e79; --accent-soft:#e6eef6; --good:#1d6b45; --good-soft:#e5f3ea;
+  --warn:#8a5a00; --warn-soft:#fbf1dc; --bad:#9b2c2c; --bad-soft:#f9e6e6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif}
+header{padding:28px 24px 8px;max-width:1100px;margin:0 auto}
+h1{font-family:"Source Serif 4",Georgia,serif;font-size:30px;margin:0 0 4px}
+header p{margin:0;color:var(--muted)}
+nav{max-width:1100px;margin:16px auto 0;padding:0 24px;display:flex;flex-wrap:wrap;gap:6px}
+nav button{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:999px;cursor:pointer;font:500 14px Inter,sans-serif;color:var(--ink)}
+nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+main{max-width:1100px;margin:0 auto;padding:18px 24px 60px}
+.tab{display:none}
+.tab.active{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:20px}
+@media (max-width:860px){.tab.active{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.card h2{font-family:"Source Serif 4",Georgia,serif;font-size:21px;margin:0 0 4px}
+.card .sub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin:18px 0 8px;border-top:1px solid var(--line);padding-top:14px}
+h3:first-of-type{border-top:none;padding-top:0;margin-top:4px}
+.q{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0}
+.q span{flex:1}
+.yn{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-shrink:0}
+.yn button{border:0;background:#fff;padding:6px 14px;cursor:pointer;font:500 13px Inter,sans-serif;color:var(--muted)}
+.yn button+button{border-left:1px solid var(--line)}
+.yn button.on[data-v=yes]{background:var(--good);color:#fff}
+.yn button.on[data-v=no]{background:#6b7280;color:#fff}
+.field{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:5px 0}
+.field label{flex:1;font-size:14px}
+.field small{display:block;color:var(--muted);font-size:12px}
+.field input,.field select{width:150px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font:14px Inter,sans-serif;text-align:right;background:#fdfcfa}
+.field select{text-align:left}
+.field input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.indent{margin-left:14px;padding-left:12px;border-left:3px solid var(--accent-soft)}
+[data-when]{display:none}
+[data-when].show{display:block}
+.result{position:sticky;top:14px;align-self:start}
+.big{font-family:"Source Serif 4",Georgia,serif;font-size:34px;font-weight:700;margin:2px 0 2px}
+.biglabel{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:10px 0 14px}
+.kpi{background:#faf9f6;border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+.kpi .v{font-size:19px;font-weight:600}
+.kpi .l{font-size:12px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.total td{font-weight:600;border-top:2px solid var(--ink)}
+.cite{color:var(--muted);font-size:12px}
+.note{border-radius:8px;padding:10px 12px;margin:10px 0;font-size:13.5px}
+.note.good{background:var(--good-soft);color:var(--good)}
+.note.warn{background:var(--warn-soft);color:var(--warn)}
+.note.bad{background:var(--bad-soft);color:var(--bad)}
+.note.info{background:var(--accent-soft);color:var(--accent)}
+.ptable input,.ptable select{width:100%;padding:6px 7px;border:1px solid var(--line);border-radius:6px;font:13.5px Inter,sans-serif;text-align:right;background:#fdfcfa}
+.ptable input[type=text],.ptable select{text-align:left}
+.ptable td{border-bottom:none;padding:4px 3px}
+.btnrow{display:flex;gap:8px;margin-top:8px}
+.btn{border:1px solid var(--line);background:#fff;padding:6px 12px;border-radius:7px;cursor:pointer;font:500 13px Inter,sans-serif}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.foot{max-width:1100px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12.5px}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+@media (max-width:640px){
+  header{padding:18px 16px 4px} h1{font-size:24px} main{padding:14px 12px 40px}
+  nav{padding:0 12px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;position:sticky;top:0;z-index:5;background:var(--bg);padding-top:8px;padding-bottom:8px}
+  nav button{white-space:nowrap;padding:10px 14px}
+  .card{padding:16px 14px}
+  .yn button{padding:10px 18px;font-size:15px}
+  .field{flex-wrap:wrap} .field input,.field select{width:100%;font-size:16px;padding:10px}
+  .ptable input,.ptable select{font-size:16px}
+  .result{position:static}
+  .btn{padding:10px 14px}
+  body #ansbar{display:flex}
+  body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+}
+#ansbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:10;align-items:center;gap:10px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:var(--accent);color:#fff;box-shadow:0 -4px 14px rgba(0,0,0,.15)}
+#ansbar .t{flex:1;min-width:0} #ansbar .l{font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.05em}
+#ansbar .v{font:700 19px "Source Serif 4",Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ansbar button{border:0;background:#fff;color:var(--accent);font:600 14px Inter,sans-serif;padding:10px 14px;border-radius:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Partnership Tax Calculator</h1>
+  <p>Answer the yes/no questions, fill in the amounts, and the answer shows with each step and its Code/Reg. cite.</p>
+</header>
+<nav id="nav">
+  <button data-tab="ob" class="active">Outside Basis</button>
+  <button data-tab="cap">Capital Accounts</button>
+  <button data-tab="ib">Inside Basis</button>
+  <button data-tab="rec">Recourse Liabilities</button>
+  <button data-tab="nr">Nonrecourse Liabilities</button>
+</nav>
+
+<main>
+<!-- ================= OUTSIDE BASIS ================= -->
+<section class="tab active" id="tab-ob">
+  <div class="card">
+    <h2>Partner's outside basis</h2>
+    <p class="sub">§§ 705, 722, 731, 733, 752, 704(d). Ordering follows Treas. Reg. § 1.704-1(d)(2) and Rev. Rul. 66-94: increases first, then distributions, then losses.</p>
+
+    <h3>Starting point</h3>
+    <div class="field"><label>Beginning outside basis<small>Enter 0 if this is the formation year</small></label><input type="number" inputmode="decimal" id="ob_beg" value="0"></div>
+
+    <h3>Contributions (§ 722)</h3>
+    <div class="q"><span>Did the partner contribute cash or property this year?</span><div class="yn" data-q="ob_contrib"></div></div>
+    <div data-when="ob_contrib" class="indent">
+      <div class="field"><label>Cash contributed</label><input type="number" inputmode="decimal" id="ob_cash" value="0"></div>
+      <div class="field"><label>Adjusted basis of property contributed<small>Use basis, not FMV</small></label><input type="number" inputmode="decimal" id="ob_propab" value="0"></div>
+      <div class="q"><span>Was the contributed property subject to a liability the partnership took on?</span><div class="yn" data-q="ob_cliab"></div></div>
+      <div data-when="ob_cliab" class="indent">
+        <div class="field"><label>Amount of that liability</label><input type="number" inputmode="decimal" id="ob_cl" value="0"></div>
+        <div class="field"><label>Partner's share of that liability after contribution (%)<small>Per § 752 allocation (see liability tabs)</small></label><input type="number" inputmode="decimal" id="ob_clpct" value="0"></div>
+      </div>
+    </div>
+
+    <h3>Changes in share of partnership liabilities (§ 752)</h3>
+    <div class="q"><span>Did the partner's share of other partnership liabilities change?</span><div class="yn" data-q="ob_lchg"></div></div>
+    <div data-when="ob_lchg" class="indent">
+      <div class="field"><label>Increase in share<small>§ 752(a): treated as a cash contribution</small></label><input type="number" inputmode="decimal" id="ob_linc" value="0"></div>
+      <div class="field"><label>Decrease in share<small>§ 752(b): treated as a cash distribution</small></label><input type="number" inputmode="decimal" id="ob_ldec" value="0"></div>
+    </div>
+
+    <h3>Distributive share of income (§ 705(a)(1))</h3>
+    <div class="field"><label>Taxable income &amp; gain</label><input type="number" inputmode="decimal" id="ob_inc" value="0"></div>
+    <div class="field"><label>Tax-exempt income</label><input type="number" inputmode="decimal" id="ob_exempt" value="0"></div>
+
+    <h3>Distributions (§§ 731, 733)</h3>
+    <div class="q"><span>Did the partner receive a cash distribution?</span><div class="yn" data-q="ob_dcash"></div></div>
+    <div data-when="ob_dcash" class="indent">
+      <div class="field"><label>Cash distributed<small>Include marketable securities treated as cash under § 731(c)</small></label><input type="number" inputmode="decimal" id="ob_dc" value="0"></div>
+    </div>
+    <div class="q"><span>Did the partner receive a (non-liquidating) property distribution?</span><div class="yn" data-q="ob_dprop"></div></div>
+    <div data-when="ob_dprop" class="indent">
+      <div class="field"><label>Partnership's inside basis in that property</label><input type="number" inputmode="decimal" id="ob_dp" value="0"></div>
+    </div>
+
+    <h3>Losses and deductions (§ 705(a)(2))</h3>
+    <div class="field"><label>Nondeductible, non-capital expenses</label><input type="number" inputmode="decimal" id="ob_nonded" value="0"></div>
+    <div class="field"><label>Distributive share of losses &amp; deductions<small>Includes charitable gifts and foreign taxes, § 704(d)(3)</small></label><input type="number" inputmode="decimal" id="ob_loss" value="0"></div>
+  </div>
+
+  <div class="card result" id="ob_out"></div>
+</section>
+
+<!-- ================= CAPITAL ACCOUNTS ================= -->
+<section class="tab" id="tab-cap">
+  <div class="card">
+    <h2>Capital accounts: § 704(b) book and tax</h2>
+    <p class="sub">Treas. Reg. § 1.704-1(b)(2)(iv). Book capital uses FMV; tax capital uses adjusted basis. Neither includes the partner's share of partnership liabilities, which is where they differ from outside basis.</p>
+
+    <h3>Starting point</h3>
+    <div class="field"><label>Beginning book capital account</label><input type="number" inputmode="decimal" id="c_bbeg" value="0"></div>
+    <div class="field"><label>Beginning tax capital account</label><input type="number" inputmode="decimal" id="c_tbeg" value="0"></div>
+
+    <h3>Contributions</h3>
+    <div class="q"><span>Did the partner contribute cash or property?</span><div class="yn" data-q="c_contrib"></div></div>
+    <div data-when="c_contrib" class="indent">
+      <div class="field"><label>Cash contributed</label><input type="number" inputmode="decimal" id="c_cash" value="0"></div>
+      <div class="field"><label>FMV of property contributed (book)</label><input type="number" inputmode="decimal" id="c_fmv" value="0"></div>
+      <div class="field"><label>Adjusted basis of property contributed (tax)</label><input type="number" inputmode="decimal" id="c_ab" value="0"></div>
+      <div class="q"><span>Did the partnership assume a liability or take property subject to one?</span><div class="yn" data-q="c_liab"></div></div>
+      <div data-when="c_liab" class="indent">
+        <div class="field"><label>Liability assumed / taken subject to<small>Reduces capital by the full amount</small></label><input type="number" inputmode="decimal" id="c_l" value="0"></div>
+      </div>
+    </div>
+
+    <h3>Distributive share of income &amp; loss</h3>
+    <div class="field"><label>Book income &amp; gain</label><input type="number" inputmode="decimal" id="c_binc" value="0"></div>
+    <div class="field"><label>Tax income &amp; gain<small>Differs from book when § 704(c) applies</small></label><input type="number" inputmode="decimal" id="c_tinc" value="0"></div>
+    <div class="field"><label>Tax-exempt income (both)</label><input type="number" inputmode="decimal" id="c_exempt" value="0"></div>
+    <div class="field"><label>Book loss &amp; deduction</label><input type="number" inputmode="decimal" id="c_bloss" value="0"></div>
+    <div class="field"><label>Tax loss &amp; deduction</label><input type="number" inputmode="decimal" id="c_tloss" value="0"></div>
+    <div class="field"><label>Nondeductible expenses (both)</label><input type="number" inputmode="decimal" id="c_nonded" value="0"></div>
+
+    <h3>Distributions</h3>
+    <div class="q"><span>Did the partner receive a cash distribution?</span><div class="yn" data-q="c_dcash"></div></div>
+    <div data-when="c_dcash" class="indent">
+      <div class="field"><label>Cash distributed</label><input type="number" inputmode="decimal" id="c_dc" value="0"></div>
+    </div>
+    <div class="q"><span>Did the partner receive a property distribution?</span><div class="yn" data-q="c_dprop"></div></div>
+    <div data-when="c_dprop" class="indent">
+      <div class="field"><label>FMV of property distributed (book)</label><input type="number" inputmode="decimal" id="c_dfmv" value="0"></div>
+      <div class="field"><label>Partnership's basis in property distributed (tax)</label><input type="number" inputmode="decimal" id="c_dab" value="0"></div>
+      <div class="field"><label>Partner's share of book gain (loss) from revaluing it<small>Reg. § 1.704-1(b)(2)(iv)(e): book it as if sold at FMV</small></label><input type="number" inputmode="decimal" id="c_reval" value="0"></div>
+      <div class="field"><label>Liability the partner assumes on it<small>Increases capital</small></label><input type="number" inputmode="decimal" id="c_dl" value="0"></div>
+    </div>
+
+    <h3>Deficit check</h3>
+    <div class="q"><span>Does the partner have a deficit restoration obligation (DRO)?</span><div class="yn" data-q="c_dro"></div></div>
+    <div class="q"><span>Does the agreement have a qualified income offset (QIO)?</span><div class="yn" data-q="c_qio"></div></div>
+    <div class="field"><label>Partner's share of liabilities (optional)<small>Used to cross-check outside basis</small></label><input type="number" inputmode="decimal" id="c_lshare" value="0"></div>
+  </div>
+  <div class="card result" id="cap_out"></div>
+</section>
+
+<!-- ================= INSIDE BASIS ================= -->
+<section class="tab" id="tab-ib">
+  <div class="card">
+    <h2>Inside basis</h2>
+    <p class="sub">The partnership's basis in its own assets: contributions (§ 723), distributed property (§ 732), and transfers of interests (§ 743(b)).</p>
+
+    <div class="field"><label>What happened?</label>
+      <select id="ib_mode">
+        <option value="contrib">Partner contributed property</option>
+        <option value="dist">Partnership distributed property</option>
+        <option value="transfer">Partner sold / transferred interest</option>
+      </select>
+    </div>
+
+    <div id="ib_contrib">
+      <h3>Contribution (§ 723)</h3>
+      <div class="field"><label>Partner's adjusted basis in property</label><input type="number" inputmode="decimal" id="ib_ab" value="0"></div>
+      <div class="field"><label>FMV of property</label><input type="number" inputmode="decimal" id="ib_fmv" value="0"></div>
+      <div class="q"><span>Did the partner recognize gain on the contribution?<br><span class="cite">e.g., § 721(b) investment company, or a disguised sale</span></span><div class="yn" data-q="ib_gain"></div></div>
+      <div data-when="ib_gain" class="indent">
+        <div class="field"><label>Gain recognized</label><input type="number" inputmode="decimal" id="ib_g" value="0"></div>
+      </div>
+      <div class="q"><span>Was the property a capital or § 1231 asset in the partner's hands?</span><div class="yn" data-q="ib_cap" data-default="yes"></div></div>
+    </div>
+
+    <div id="ib_dist">
+      <h3>Distribution (§§ 731, 732)</h3>
+      <div class="q"><span>Is this a liquidating distribution (the partner's whole interest)?</span><div class="yn" data-q="ib_liq"></div></div>
+      <div class="field"><label>Partner's outside basis before distribution<small>After the year's increases &amp; any liability change</small></label><input type="number" inputmode="decimal" id="ib_ob" value="0"></div>
+      <div class="field"><label>Cash distributed<small>Include any decrease in liability share</small></label><input type="number" inputmode="decimal" id="ib_cash" value="0"></div>
+      <div class="q"><span>Were unrealized receivables or inventory (§ 751 "hot" assets) distributed?</span><div class="yn" data-q="ib_hot"></div></div>
+      <div data-when="ib_hot" class="indent">
+        <div class="field"><label>Partnership's basis in hot assets distributed</label><input type="number" inputmode="decimal" id="ib_hotb" value="0"></div>
+      </div>
+      <div class="q"><span>Was any other property distributed?</span><div class="yn" data-q="ib_oth"></div></div>
+      <div data-when="ib_oth" class="indent">
+        <div class="field"><label>Partnership's basis in other property distributed</label><input type="number" inputmode="decimal" id="ib_othb" value="0"></div>
+      </div>
+      <div class="q"><span>Does the partnership have a § 754 election in effect?</span><div class="yn" data-q="ib_754d"></div></div>
+    </div>
+
+    <div id="ib_transfer">
+      <h3>Transfer of an interest (§ 743(b))</h3>
+      <div class="field"><label>Price paid for the interest (cash)</label><input type="number" inputmode="decimal" id="ib_price" value="0"></div>
+      <div class="field"><label>Transferee's share of partnership liabilities</label><input type="number" inputmode="decimal" id="ib_tl" value="0"></div>
+      <div class="field"><label>Transferee's share of inside basis<small>Previously taxed capital + share of liabilities</small></label><input type="number" inputmode="decimal" id="ib_share" value="0"></div>
+      <div class="q"><span>Does the partnership have a § 754 election in effect?</span><div class="yn" data-q="ib_754t"></div></div>
+      <div class="q"><span>Is there a substantial built-in loss?<br><span class="cite">§ 743(d): inside basis exceeds FMV by more than $250,000, or the transferee would be allocated a loss over $250,000</span></span><div class="yn" data-q="ib_sbil"></div></div>
+    </div>
+  </div>
+  <div class="card result" id="ib_out"></div>
+</section>
+
+<!-- ================= RECOURSE ================= -->
+<section class="tab" id="tab-rec">
+  <div class="card">
+    <h2>Recourse liabilities: constructive liquidation</h2>
+    <p class="sub">Treas. Reg. § 1.752-2. A liability is recourse to the extent a partner bears the economic risk of loss (ERL), meaning that partner would have to pay if the partnership could not.</p>
+
+    <h3>Is it recourse?</h3>
+    <div class="q"><span>If the partnership couldn't pay, would any partner (or related person) have to pay the creditor or contribute to the partnership?</span><div class="yn" data-q="r_erl" data-default="yes"></div></div>
+    <div id="r_nr_msg" class="note warn" style="display:none">No partner bears the economic risk of loss, so the liability is <b>nonrecourse</b>. Use the Nonrecourse Liabilities tab (Reg. § 1.752-3).</div>
+
+    <div id="r_body">
+      <h3>The liability</h3>
+      <div class="field"><label>Recourse liability amount</label><input type="number" inputmode="decimal" id="r_L" value="100000"></div>
+      <div class="q"><span>Does a partner personally guarantee part of it?</span><div class="yn" data-q="r_guar"></div></div>
+      <div data-when="r_guar" class="indent">
+        <div class="field"><label>Guaranteeing partner</label><select id="r_gp"></select></div>
+        <div class="field"><label>Amount guaranteed<small>Simplified: guarantor bears this first, with no reimbursement right</small></label><input type="number" inputmode="decimal" id="r_ga" value="0"></div>
+      </div>
+
+      <h3>Partners</h3>
+      <p class="cite">Capital = § 704(b) book capital account just before the step. Obligation: GPs and partners with an unlimited DRO absorb any deficit; LPs absorb none; a limited DRO caps it.</p>
+      <table class="ptable" id="r_tbl">
+        <thead><tr><th>Partner</th><th class="n">Book capital</th><th class="n">Loss %</th><th>Deficit obligation</th><th class="n">Limit</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="btnrow"><button class="btn" id="r_add">+ Add partner</button><button class="btn" id="r_rm">− Remove last</button></div>
+    </div>
+  </div>
+  <div class="card result" id="rec_out"></div>
+</section>
+
+<!-- ================= NONRECOURSE ================= -->
+<section class="tab" id="tab-nr">
+  <div class="card">
+    <h2>Nonrecourse liabilities: three tiers</h2>
+    <p class="sub">Treas. Reg. § 1.752-3. No partner bears the economic risk of loss; only the lender's collateral is at risk.</p>
+
+    <h3>The liability and the property</h3>
+    <div class="field"><label>Nonrecourse liability amount</label><input type="number" inputmode="decimal" id="n_L" value="100000"></div>
+    <div class="field"><label>Book value of encumbered property</label><input type="number" inputmode="decimal" id="n_bv" value="100000"></div>
+    <div class="q"><span>Was the encumbered property contributed by a partner with built-in gain (§ 704(c) property)?</span><div class="yn" data-q="n_704c"></div></div>
+    <div data-when="n_704c" class="indent">
+      <div class="field"><label>Tax basis of the property</label><input type="number" inputmode="decimal" id="n_tb" value="0"></div>
+      <div class="field"><label>Contributing partner</label><select id="n_cp"></select></div>
+    </div>
+
+    <h3>Partners</h3>
+    <p class="cite">Minimum gain % = each partner's share of partnership minimum gain (usually how nonrecourse deductions were allocated). Profit % is the Tier 3 default.</p>
+    <table class="ptable" id="n_tbl">
+      <thead><tr><th>Partner</th><th class="n">Min. gain %</th><th class="n">Profit %</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="btnrow"><button class="btn" id="n_add">+ Add partner</button><button class="btn" id="n_rm">− Remove last</button></div>
+  </div>
+  <div class="card result" id="nr_out"></div>
+</section>
+</main>
+<div id="ansbar" aria-live="polite"><div class="t"><div class="l" id="ans_l"></div><div class="v" id="ans_v"></div></div><button id="ans_go">See steps</button></div>
+<p class="foot">Built as a study aid for a partnership tax course. It applies simplified textbook versions of the rules; check edge cases (bottom-dollar guarantees, related-party lenders, §§ 704(c)(1)(B)/737, § 732(c) allocation among several properties) against your casebook and the regulations.</p>
+
+<script>
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const v = id => { const e=$(id); if(!e) return 0; const x=parseFloat(e.value); return isNaN(x)?0:x; };
+const fmt = n => { const r=Math.round(n*100)/100; const s=Math.abs(r).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2}); return (r<0?'(':'')+'$'+s+(r<0?')':''); };
+const pct = n => (Math.round(n*100)/100)+'%';
+const state = {};
+const yes = q => state[q]==='yes';
+
+function row(label, amt, cite, cls){ return `<tr class="${cls||''}"><td>${label}${cite?`<div class="cite">${cite}</div>`:''}</td><td class="n">${amt===''?'':fmt(amt)}</td></tr>`; }
+function note(kind, html){ return `<div class="note ${kind}">${html}</div>`; }
+
+/* ---------- yes/no widgets ---------- */
+document.querySelectorAll('.yn').forEach(el=>{
+  const q=el.dataset.q; state[q]=el.dataset.default||'no';
+  el.innerHTML='<button data-v="yes">Yes</button><button data-v="no">No</button>';
+  el.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click',()=>{ state[q]=b.dataset.v; paintYN(); calcAll(); });
+  });
+});
+function paintYN(){
+  document.querySelectorAll('.yn').forEach(el=>{
+    el.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.v===state[el.dataset.q]));
+  });
+  document.querySelectorAll('[data-when]').forEach(el=>el.classList.toggle('show', yes(el.dataset.when)));
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('#nav button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x===b));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+b.dataset.tab));
+  try{ history.replaceState(null,'','#'+b.dataset.tab); }catch(e){}
+}));
+function openHash(){ const h=(location.hash||'').slice(1); const b=document.querySelector(`#nav button[data-tab="${h}"]`); if(b) b.click(); }
+window.addEventListener('hashchange',openHash);
+
+/* ================= OUTSIDE BASIS ================= */
+function calcOB(){
+  let b=v('ob_beg'); const rows=[]; const notes=[];
+  rows.push(row('Beginning outside basis', b));
+  let inc=0, deemedDist=0;
+  if(yes('ob_contrib')){
+    const c=v('ob_cash'), p=v('ob_propab');
+    if(c) rows.push(row('+ Cash contributed', c, '§ 722'));
+    if(p) rows.push(row('+ Adjusted basis of property contributed', p, '§ 722 (basis, not FMV)'));
+    inc+=c+p;
+    if(yes('ob_cliab')){
+      const L=v('ob_cl'), share=L*v('ob_clpct')/100, relief=L-share;
+      rows.push(row(`Liability on contributed property: share kept ${fmt(share)} − liability relieved ${fmt(L)}`, '', 'Reg. § 1.752-1(f): increases and decreases from one transaction are netted'));
+      if(relief>0){ deemedDist+=relief; rows.push(row('Net decrease in liabilities, treated as a cash distribution', -relief, '§ 752(b)')); }
+    }
+  }
+  if(yes('ob_lchg')){
+    const i=v('ob_linc'), d=v('ob_ldec');
+    if(i){ inc+=i; rows.push(row('+ Increase in share of partnership liabilities', i, '§ 752(a), deemed contribution')); }
+    if(d){ deemedDist+=d; rows.push(row('Decrease in share of partnership liabilities, treated as cash', -d, '§ 752(b), deemed distribution')); }
+  }
+  const ti=v('ob_inc'), te=v('ob_exempt');
+  if(ti) rows.push(row('+ Share of taxable income & gain', ti, '§ 705(a)(1)(A)'));
+  if(te) rows.push(row('+ Share of tax-exempt income', te, '§ 705(a)(1)(B)'));
+  inc+=ti+te;
+  // Step 1: increases
+  b+=inc;
+  rows.push(row('<b>Step 1: basis after increases</b>', b, 'Increases are applied first', 'total'));
+  // Step 2: cash distributions incl. deemed
+  const cash=(yes('ob_dcash')?v('ob_dc'):0)+deemedDist;
+  let gain=0;
+  if(cash>0){
+    if(yes('ob_dcash')&&v('ob_dc')) rows.push(row('− Actual cash distributed', -v('ob_dc'), '§ 733(1)'));
+    if(cash>b){ gain=cash-b; rows.push(row('Cash beyond basis = gain recognized', gain, '§ 731(a)(1): capital gain, subject to § 751(b)')); b=0; }
+    else b-=cash;
+    rows.push(row('<b>Step 2: after cash and deemed-cash distributions</b>', b, '', 'total'));
+  }
+  // Step 3: property distribution
+  let propBasis=null;
+  if(yes('ob_dprop')){
+    const pb=v('ob_dp'); propBasis=Math.min(pb,b);
+    rows.push(row(`− Basis taken in distributed property (lesser of ${fmt(pb)} or ${fmt(b)})`, -propBasis, '§§ 732(a)(1)–(2), 733(2)'));
+    b-=propBasis;
+    rows.push(row('<b>Step 3: after property distribution</b>', b, '', 'total'));
+  }
+  // Step 4: nondeductible expenses then losses
+  const nd=v('ob_nonded');
+  let ndAllowed=0;
+  if(nd){ ndAllowed=Math.min(nd,b); b-=ndAllowed; rows.push(row('− Nondeductible, non-capital expenses (not below zero)', -ndAllowed, '§ 705(a)(2)(B)')); }
+  const loss=v('ob_loss'); let allowed=0, susp=0;
+  if(loss){
+    allowed=Math.min(loss,b); susp=loss-allowed; b-=allowed;
+    rows.push(row('− Losses & deductions allowed', -allowed, '§ 704(d): limited to basis'));
+  }
+  rows.push(row('<b>Ending outside basis</b>', b, '', 'total'));
+
+  if(gain>0) notes.push(note('bad',`<b>Gain recognized: ${fmt(gain)}.</b> Cash and deemed cash distributed (${fmt(cash)}) were more than the partner's basis. § 731(a)(1); check § 751(b) if the partnership holds hot assets.`));
+  else if(cash>0) notes.push(note('good','No gain: cash and deemed cash distributed did not exceed basis (§ 731(a)(1)).'));
+  if(susp>0) notes.push(note('warn',`<b>Suspended loss: ${fmt(susp)}.</b> It carries forward until the partner has enough basis again. § 704(d)(1); Reg. § 1.704-1(d)(1).`));
+  if(propBasis!==null && propBasis<v('ob_dp')) notes.push(note('info',`The partner's basis in the distributed property is limited to ${fmt(propBasis)}; the partnership's basis was ${fmt(v('ob_dp'))}. With a § 754 election, the partnership increases the basis of its remaining property by the difference (§ 734(b)(1)(B)).`));
+
+  $('ob_out').innerHTML=`<div class="biglabel">Ending outside basis</div><div class="big">${fmt(b)}</div>
+  <div class="kpis"><div class="kpi"><div class="v">${fmt(gain)}</div><div class="l">Gain recognized § 731</div></div>
+  <div class="kpi"><div class="v">${fmt(allowed)}</div><div class="l">Loss allowed</div></div>
+  <div class="kpi"><div class="v">${fmt(susp)}</div><div class="l">Loss suspended § 704(d)</div></div></div>
+  ${notes.join('')}<table><thead><tr><th>Step</th><th class="n">Amount</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
+/* ================= CAPITAL ACCOUNTS ================= */
+function calcCap(){
+  let bk=v('c_bbeg'), tx=v('c_tbeg'); const rows=[]; const notes=[];
+  const r2=(label,b,t,cite,cls)=>`<tr class="${cls||''}"><td>${label}${cite?`<div class="cite">${cite}</div>`:''}</td><td class="n">${fmt(b)}</td><td class="n">${fmt(t)}</td></tr>`;
+  rows.push(r2('Beginning',bk,tx));
+  if(yes('c_contrib')){
+    const c=v('c_cash'); if(c){ bk+=c; tx+=c; rows.push(r2('+ Cash contributed',c,c,'Reg. § 1.704-1(b)(2)(iv)(b)(1)')); }
+    const f=v('c_fmv'), a=v('c_ab'); if(f||a){ bk+=f; tx+=a; rows.push(r2('+ Property contributed (book FMV / tax basis)',f,a,'Reg. § 1.704-1(b)(2)(iv)(b)(2), (d)(1)')); }
+    if(yes('c_liab')){ const l=v('c_l'); bk-=l; tx-=l; rows.push(r2('− Liability assumed by the partnership',-l,-l,'Reg. § 1.704-1(b)(2)(iv)(b)')); }
+    if(f&&a&&f!==a) notes.push(note('info',`Built-in ${f>a?'gain':'loss'} of ${fmt(Math.abs(f-a))} on the contributed property. § 704(c) requires tax items to be allocated to account for it (traditional, curative, or remedial method).`));
+  }
+  const bi=v('c_binc'), ti=v('c_tinc'), ex=v('c_exempt');
+  if(bi||ti){ bk+=bi; tx+=ti; rows.push(r2('+ Share of income & gain',bi,ti,'Reg. § 1.704-1(b)(2)(iv)(b)(3)')); }
+  if(ex){ bk+=ex; tx+=ex; rows.push(r2('+ Tax-exempt income',ex,ex)); }
+  if(yes('c_dprop')){ const rv=v('c_reval'); if(rv){ bk+=rv; rows.push(r2('+ Book gain on revaluing distributed property',rv,0,'Reg. § 1.704-1(b)(2)(iv)(e)(1)')); } }
+  if(yes('c_dcash')){ const d=v('c_dc'); bk-=d; tx-=d; rows.push(r2('− Cash distributed',-d,-d,'Reg. § 1.704-1(b)(2)(iv)(b)(4)')); }
+  if(yes('c_dprop')){
+    const f=v('c_dfmv'), a=v('c_dab'), l=v('c_dl');
+    bk-=f; tx-=a; rows.push(r2('− Property distributed (book FMV / tax basis)',-f,-a,'Reg. § 1.704-1(b)(2)(iv)(b)(5)'));
+    if(l){ bk+=l; tx+=l; rows.push(r2('+ Liability the partner assumes on distributed property',l,l)); }
+  }
+  const blo=v('c_bloss'), tlo=v('c_tloss'), nd=v('c_nonded');
+  if(blo||tlo){ bk-=blo; tx-=tlo; rows.push(r2('− Share of loss & deduction',-blo,-tlo,'Reg. § 1.704-1(b)(2)(iv)(b)(6)')); }
+  if(nd){ bk-=nd; tx-=nd; rows.push(r2('− Nondeductible expenses',-nd,-nd,'Reg. § 1.704-1(b)(2)(iv)(b)(7)')); }
+  rows.push(r2('<b>Ending capital account</b>',bk,tx,'','total'));
+
+  if(bk<0){
+    if(yes('c_dro')) notes.push(note('good',`Book capital is negative (${fmt(bk)}), and the partner's DRO means they must restore it on liquidation. The allocations satisfy the economic effect test (Reg. § 1.704-1(b)(2)(ii)(b)).`));
+    else if(yes('c_qio')) notes.push(note('warn',`Book capital is negative (${fmt(bk)}) with no DRO. The alternate test for economic effect allows a deficit only to the extent it comes from unexpected adjustments; the QIO must remove it as quickly as possible (Reg. § 1.704-1(b)(2)(ii)(d)). Loss allocations that create or increase a deficit are reallocated.`));
+    else notes.push(note('bad',`Book capital is negative (${fmt(bk)}), and there is no DRO or QIO. The allocation creating the deficit lacks economic effect and is reallocated by the partners' interests in the partnership (Reg. § 1.704-1(b)(3)).`));
+  }
+  const ls=v('c_lshare');
+  if(ls) notes.push(note('info',`Cross-check: tax capital ${fmt(tx)} + share of liabilities ${fmt(ls)} = <b>${fmt(tx+ls)}</b>. This should normally equal outside basis.`));
+
+  $('cap_out').innerHTML=`<div class="kpis"><div class="kpi"><div class="v">${fmt(bk)}</div><div class="l">Book (§ 704(b)) capital</div></div>
+  <div class="kpi"><div class="v">${fmt(tx)}</div><div class="l">Tax capital</div></div>
+  <div class="kpi"><div class="v">${fmt(bk-tx)}</div><div class="l">Book − tax (§ 704(c) gap)</div></div></div>
+  ${notes.join('')}<table><thead><tr><th>Item</th><th class="n">Book</th><th class="n">Tax</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
+/* ================= INSIDE BASIS ================= */
+function calcIB(){
+  const mode=$('ib_mode').value;
+  ['contrib','dist','transfer'].forEach(m=>$('ib_'+m).style.display=m===mode?'block':'none');
+  let html='';
+  if(mode==='contrib'){
+    const ab=v('ib_ab'), fmv=v('ib_fmv'), g=yes('ib_gain')?v('ib_g'):0, ib=ab+g, bic=fmv-ab;
+    html=`<div class="biglabel">Partnership's inside (tax) basis</div><div class="big">${fmt(ib)}</div>
+    <div class="kpis"><div class="kpi"><div class="v">${fmt(fmv)}</div><div class="l">Book value (FMV)</div></div>
+    <div class="kpi"><div class="v">${fmt(bic)}</div><div class="l">§ 704(c) built-in ${bic>=0?'gain':'loss'}</div></div></div>
+    <table><tbody>${row("Partner's adjusted basis",ab,'')}${g?row('+ Gain recognized by partner',g,'§ 723'):''}${row('<b>Inside basis</b>',ib,'§ 723: carryover basis','total')}</tbody></table>
+    ${note('info',`Holding period: ${yes('ib_cap')?"the partnership tacks the partner's holding period (§ 1223(2)).":'no tacking for non-capital/non-§ 1231 property; the holding period starts at contribution.'} The partner's outside basis also starts from the same ${fmt(ab)} under § 722.`)}
+    ${bic>0?note('warn',`If the partnership sells for FMV, the first ${fmt(bic)} of tax gain goes to the contributor under § 704(c)(1)(A). Distributing the property to another partner within 7 years triggers § 704(c)(1)(B).`):''}
+    ${bic<0?note('warn',`Built-in loss: under § 704(c)(1)(C), only the contributing partner can benefit from the ${fmt(-bic)} loss; for other partners, inside basis is treated as FMV.`):''}`;
+  }
+  if(mode==='dist'){
+    const liq=yes('ib_liq'); let ob=v('ib_ob'); const cash=v('ib_cash'); const rows=[]; const notes=[];
+    rows.push(row('Outside basis before distribution',ob));
+    let gain=0, loss=0;
+    rows.push(row('− Cash distributed',-cash,'§ 731(a)(1)'));
+    if(cash>ob){ gain=cash-ob; ob=0; } else ob-=cash;
+    if(gain) rows.push(row('Gain recognized (cash beyond basis)',gain,'§ 731(a)(1)'));
+    rows.push(row('Basis remaining for property',ob,'','total'));
+    let hotB=0, othB=0;
+    if(yes('ib_hot')){ const p=v('ib_hotb'); hotB=Math.min(p,ob); ob-=hotB; rows.push(row(`Hot assets take lesser of partnership basis ${fmt(p)} or remaining basis`,hotB,'§ 732(c)(1)(A): never more than the partnership\'s basis')); if(hotB<p) notes.push(note('info','Hot assets got less than the partnership\'s basis because outside basis ran out.')); }
+    if(yes('ib_oth')){
+      const p=v('ib_othb');
+      othB = liq ? ob : Math.min(p,ob);
+      ob-=othB;
+      rows.push(row(liq?'Other property takes all remaining outside basis':`Other property takes lesser of partnership basis ${fmt(p)} or remaining basis`,othB,liq?'§ 732(b), allocated under § 732(c)':'§ 732(a)(2)'));
+      const diff=p-othB;
+      if(diff!==0){
+        const up=diff>0;
+        notes.push(note('info',`The partner's basis in the other property (${fmt(othB)}) ${up?'is less':'is more'} than the partnership's (${fmt(p)}) by ${fmt(Math.abs(diff))}. ${yes('ib_754d')?`With the § 754 election, the partnership ${up?'increases':'decreases'} the basis of its remaining property by that amount (§ 734(b)(1)(B)/(2)(B)).`:'Without a § 754 election there is no § 734(b) adjustment (unless there is a substantial basis reduction over $250,000, § 734(d)).'}`));
+      }
+    }
+    if(liq && ob>0){ loss=ob; rows.push(row('Unrecovered basis = loss recognized',-loss,'§ 731(a)(2): only cash, hot assets distributed')); ob=0; }
+    if(!liq && ob>0) rows.push(row('<b>Outside basis left in continuing interest</b>',ob,'§ 733','total'));
+    if(gain) notes.unshift(note('bad',`<b>Gain recognized: ${fmt(gain)}</b> (§ 731(a)(1)).`));
+    if(loss) notes.unshift(note('bad',`<b>Loss recognized: ${fmt(loss)}</b>. In a liquidating distribution of only cash, unrealized receivables, and inventory, basis that isn't recovered is a capital loss (§ 731(a)(2)). ${yes('ib_754d')?'§ 734(b)(2)(A) decreases the partnership\'s remaining basis by the loss.':''}`));
+    if(!gain&&!loss) notes.unshift(note('good','No gain or loss recognized on the distribution.'));
+    html=`<div class="kpis"><div class="kpi"><div class="v">${fmt(hotB)}</div><div class="l">Partner's basis: hot assets</div></div>
+    <div class="kpi"><div class="v">${fmt(othB)}</div><div class="l">Partner's basis: other property</div></div>
+    <div class="kpi"><div class="v">${fmt(gain-loss)}</div><div class="l">Gain (loss) recognized</div></div></div>
+    ${notes.join('')}<table><thead><tr><th>Step</th><th class="n">Amount</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  }
+  if(mode==='transfer'){
+    const price=v('ib_price'), tl=v('ib_tl'), share=v('ib_share');
+    const outside=price+tl, adj=outside-share;
+    const applies = yes('ib_754t') || yes('ib_sbil');
+    html=`<div class="biglabel">§ 743(b) adjustment</div><div class="big">${applies?fmt(adj):'None'}</div>
+    <table><tbody>${row('Price paid',price,'')}${row('+ Share of liabilities assumed',tl,'§ 752(d)')}${row("Transferee's outside basis",outside,'§§ 742, 1012','total')}${row("− Transferee's share of inside basis",-share,'Reg. § 1.743-1(d)')}${row('<b>Difference</b>',adj,'','total')}</tbody></table>
+    ${applies?note(adj>=0?'good':'warn',`The adjustment ${adj>=0?'increases':'decreases'} the basis of partnership property <b>for the transferee only</b>, allocated among assets under § 755. ${yes('ib_sbil')&&!yes('ib_754t')?'It is mandatory here because of the substantial built-in loss (§ 743(a), (d)).':''}`):note('info',`No § 743(b) adjustment: there is no § 754 election and no substantial built-in loss. The transferee steps into the transferor's share of inside basis, so the ${fmt(adj)} gap stays until the transferee sells or liquidates.`)}`;
+  }
+  $('ib_out').innerHTML=html;
+}
+
+/* ================= RECOURSE ================= */
+let rPartners=[
+  {n:'A (GP)',c:0,l:50,t:'unl',lim:0},
+  {n:'B (LP)',c:0,l:50,t:'none',lim:0}
+];
+function drawR(){
+  $('r_tbl').querySelector('tbody').innerHTML=rPartners.map((p,i)=>`<tr>
+   <td><input type="text" data-i="${i}" data-k="n" value="${p.n}"></td>
+   <td><input type="number" inputmode="decimal" data-i="${i}" data-k="c" value="${p.c}"></td>
+   <td><input type="number" inputmode="decimal" data-i="${i}" data-k="l" value="${p.l}"></td>
+   <td><select data-i="${i}" data-k="t"><option value="unl"${p.t==='unl'?' selected':''}>GP / unlimited DRO</option><option value="lim"${p.t==='lim'?' selected':''}>Limited DRO</option><option value="none"${p.t==='none'?' selected':''}>None (LP)</option></select></td>
+   <td><input type="number" inputmode="decimal" data-i="${i}" data-k="lim" value="${p.lim}" ${p.t==='lim'?'':'disabled'}></td></tr>`).join('');
+  $('r_tbl').querySelectorAll('input,select').forEach(e=>e.addEventListener('input',()=>{
+    const p=rPartners[e.dataset.i]; const k=e.dataset.k;
+    p[k]= (k==='n'||k==='t')? e.value : (parseFloat(e.value)||0);
+    if(k==='t'){ drawR(); }
+    fillSel('r_gp',rPartners); calcRec();
+  }));
+  fillSel('r_gp',rPartners);
+}
+function fillSel(id,list){ const s=$(id); const cur=s.value; s.innerHTML=list.map((p,i)=>`<option value="${i}">${p.n}</option>`).join(''); if(cur!==''&&cur<list.length) s.value=cur; }
+
+function calcRec(){
+  const isRec=yes('r_erl');
+  $('r_nr_msg').style.display=isRec?'none':'block';
+  $('r_body').style.display=isRec?'block':'none';
+  if(!isRec){ $('rec_out').innerHTML=note('warn','Classified as <b>nonrecourse</b>. See the Nonrecourse tab.'); return; }
+  const L=v('r_L'); const P=rPartners;
+  let guarIdx=-1, guarAmt=0;
+  if(yes('r_guar')){ guarIdx=parseInt($('r_gp').value)||0; guarAmt=Math.min(v('r_ga'),L); }
+  const Lrem=L-guarAmt;
+  // Step 1: all assets worthless. Book assets = sum capital + liability (recourse only modeled)
+  const sumCap=P.reduce((s,p)=>s+p.c,0);
+  const assets=sumCap+L;
+  const hypLoss=assets; // all assets (incl. cash) worthless
+  // Step 2: allocate loss by loss %, respect caps for those without unlimited DRO; reallocate
+  const cap=P.map(p=> p.t==='unl'?Infinity:(p.t==='lim'?p.lim:0)); // max deficit allowed
+  const sumL=P.reduce((s,p)=>s+p.l,0)||1;
+  const alloc=P.map(()=>0);
+  let remaining=hypLoss; let active=P.map((p,i)=>i);
+  let guard=0;
+  while(remaining>0.0001 && active.length && guard<20){
+    guard++;
+    const tot=active.reduce((s,i)=>s+P[i].l,0);
+    if(tot<=0) break;
+    let spill=0; const next=[];
+    active.forEach(i=>{
+      const want=remaining*P[i].l/tot;
+      const room = P[i].c + cap[i] - alloc[i]; // loss that can be absorbed before exceeding allowed deficit
+      if(want>room){ alloc[i]+=Math.max(room,0); spill+=want-Math.max(room,0); }
+      else { alloc[i]+=want; if(cap[i]===Infinity||room-want>0.0001) next.push(i); }
+    });
+    remaining=spill; active=next;
+  }
+  // Ending capital & obligation
+  const endCap=P.map((p,i)=>p.c-alloc[i]);
+  const oblig=endCap.map(x=>Math.max(-x,0));
+  const totOb=oblig.reduce((s,x)=>s+x,0);
+  // Obligation pays partnership, which pays creditor. Scale so shares of the remaining liability are proportional.
+  // Guarantor pays guaranteed portion directly.
+  let shares=P.map(()=>0);
+  const scale = totOb>0 ? Math.min(1, Lrem/totOb) : 0;
+  // Each partner's ERL for the non-guaranteed piece = deficit obligation (capped at Lrem in total)
+  shares=oblig.map(x=>x*scale);
+  if(guarIdx>=0) shares[guarIdx]+=guarAmt;
+  const covered=shares.reduce((s,x)=>s+x,0);
+  const uncovered=Math.max(L-covered,0);
+
+  const rows=P.map((p,i)=>`<tr><td>${p.n}</td><td class="n">${fmt(p.c)}</td><td class="n">${fmt(-alloc[i])}</td><td class="n">${fmt(endCap[i])}</td><td class="n"><b>${fmt(shares[i])}</b></td></tr>`).join('');
+  const notes=[];
+  if(guarAmt) notes.push(note('info',`${P[guarIdx].n} guaranteed ${fmt(guarAmt)}, so that amount goes to them first. The other ${fmt(Lrem)} runs through the constructive liquidation.`));
+  if(remaining>0.01) notes.push(note('warn',`${fmt(remaining)} of hypothetical loss could not be allocated because nobody has an obligation to absorb it.`));
+  if(uncovered>0.01) notes.push(note('warn',`<b>${fmt(uncovered)} of the liability is not borne by any partner</b>, so that part is treated as <b>nonrecourse</b> and allocated under Reg. § 1.752-3.`));
+  else notes.push(note('good','The whole liability is allocated to partners who bear the economic risk of loss.'));
+  $('rec_out').innerHTML=`<div class="biglabel">Recourse liability allocated</div><div class="big">${fmt(covered)} <span style="font-size:16px;color:var(--muted)">of ${fmt(L)}</span></div>
+  <p class="cite" style="margin-top:8px"><b>Constructive liquidation</b> (Reg. § 1.752-2(b)(1)): (1) every liability is due; (2) every asset, cash included, is worthless; (3) the partnership disposes of all assets for nothing, a loss of ${fmt(hypLoss)}; (4) the loss is allocated under the agreement; (5) the partnership liquidates. Whoever would have to make up a deficit bears the ERL.</p>
+  ${notes.join('')}
+  <table><thead><tr><th>Partner</th><th class="n">Capital</th><th class="n">Hyp. loss</th><th class="n">Ending</th><th class="n">Share of liability</th></tr></thead><tbody>${rows}
+  <tr class="total"><td>Total</td><td class="n">${fmt(sumCap)}</td><td class="n">${fmt(-alloc.reduce((s,x)=>s+x,0))}</td><td class="n"></td><td class="n">${fmt(covered)}</td></tr></tbody></table>`;
+}
+$('r_add').onclick=()=>{ rPartners.push({n:'Partner '+String.fromCharCode(65+rPartners.length),c:0,l:0,t:'none',lim:0}); drawR(); calcRec(); };
+$('r_rm').onclick=()=>{ if(rPartners.length>1){ rPartners.pop(); drawR(); calcRec(); } };
+
+/* ================= NONRECOURSE ================= */
+let nPartners=[{n:'A',mg:50,pr:50},{n:'B',mg:50,pr:50}];
+function drawN(){
+  $('n_tbl').querySelector('tbody').innerHTML=nPartners.map((p,i)=>`<tr>
+   <td><input type="text" data-i="${i}" data-k="n" value="${p.n}"></td>
+   <td><input type="number" inputmode="decimal" data-i="${i}" data-k="mg" value="${p.mg}"></td>
+   <td><input type="number" inputmode="decimal" data-i="${i}" data-k="pr" value="${p.pr}"></td></tr>`).join('');
+  $('n_tbl').querySelectorAll('input').forEach(e=>e.addEventListener('input',()=>{
+    const p=nPartners[e.dataset.i]; const k=e.dataset.k;
+    p[k]= k==='n'? e.value : (parseFloat(e.value)||0);
+    fillSel('n_cp',nPartners); calcNR();
+  }));
+  fillSel('n_cp',nPartners);
+}
+function calcNR(){
+  const L=v('n_L'), bv=v('n_bv'); const P=nPartners;
+  const mg=Math.max(L-bv,0);
+  const sumMg=P.reduce((s,p)=>s+p.mg,0); const sumPr=P.reduce((s,p)=>s+p.pr,0)||1;
+  const t1=P.map(p=> sumMg? mg*p.mg/sumMg : 0);
+  let t2=P.map(()=>0); let t2tot=0;
+  if(yes('n_704c')){
+    const tb=v('n_tb'); const ci=parseInt($('n_cp').value)||0;
+    t2tot=Math.max(Math.min(L,bv)-tb,0);
+    t2tot=Math.min(t2tot, L-mg);
+    t2[ci]=t2tot;
+  }
+  const excess=Math.max(L-mg-t2tot,0);
+  const t3=P.map(p=>excess*p.pr/sumPr);
+  const tot=P.map((p,i)=>t1[i]+t2[i]+t3[i]);
+  const rows=P.map((p,i)=>`<tr><td>${p.n}</td><td class="n">${fmt(t1[i])}</td><td class="n">${fmt(t2[i])}</td><td class="n">${fmt(t3[i])}</td><td class="n"><b>${fmt(tot[i])}</b></td></tr>`).join('');
+  const notes=[];
+  if(mg===0) notes.push(note('info','No partnership minimum gain: the liability does not exceed the property\'s book value, so Tier 1 is zero.'));
+  if(sumMg && Math.abs(sumMg-100)>0.01) notes.push(note('warn',`Minimum gain percentages add up to ${pct(sumMg)}, not 100%. They are scaled to 100%.`));
+  if(Math.abs(sumPr-100)>0.01) notes.push(note('warn',`Profit percentages add up to ${pct(sumPr)}, not 100%. They are scaled to 100%.`));
+  $('nr_out').innerHTML=`<div class="kpis"><div class="kpi"><div class="v">${fmt(mg)}</div><div class="l">Tier 1: partnership minimum gain</div></div>
+  <div class="kpi"><div class="v">${fmt(t2tot)}</div><div class="l">Tier 2: § 704(c) minimum gain</div></div>
+  <div class="kpi"><div class="v">${fmt(excess)}</div><div class="l">Tier 3: excess nonrecourse</div></div></div>
+  <table style="margin-bottom:12px"><tbody>
+  ${row('Tier 1: share of partnership minimum gain (liability − book value)',mg,'Reg. §§ 1.752-3(a)(1), 1.704-2(d)')}
+  ${row('Tier 2: § 704(c) gain if the property were sold for the liability amount',t2tot,'Reg. § 1.752-3(a)(2)')}
+  ${row('Tier 3: remaining liability, by profit share',excess,'Reg. § 1.752-3(a)(3)')}</tbody></table>
+  ${notes.join('')}
+  <table><thead><tr><th>Partner</th><th class="n">Tier 1</th><th class="n">Tier 2</th><th class="n">Tier 3</th><th class="n">Total share</th></tr></thead><tbody>${rows}
+  <tr class="total"><td>Total</td><td class="n">${fmt(mg)}</td><td class="n">${fmt(t2tot)}</td><td class="n">${fmt(excess)}</td><td class="n">${fmt(tot.reduce((s,x)=>s+x,0))}</td></tr></tbody></table>
+  <p class="cite">Tier 3 can also follow a reasonable method set by the agreement, or go first to the § 704(c) partner up to their excess built-in gain. This tool uses profit shares.</p>`;
+}
+$('n_add').onclick=()=>{ nPartners.push({n:String.fromCharCode(65+nPartners.length),mg:0,pr:0}); drawN(); calcNR(); };
+$('n_rm').onclick=()=>{ if(nPartners.length>1){ nPartners.pop(); drawN(); calcNR(); } };
+
+/* ---------- wiring ---------- */
+function calcAll(){ calcOB(); calcCap(); calcIB(); calcRec(); calcNR(); updateBar(); }
+const OUTS={ob:"ob_out",cap:"cap_out",ib:"ib_out",rec:"rec_out",nr:"nr_out"};
+function activeTab(){ const b=document.querySelector("#nav button.active"); return b?b.dataset.tab:"ob"; }
+function updateBar(){
+  const out=$(OUTS[activeTab()]); if(!out) return;
+  let l="", val="";
+  const big=out.querySelector(".big"), bl=out.querySelector(".biglabel");
+  if(big){ l=bl?bl.textContent:"Answer"; val=big.textContent; }
+  else { const k=out.querySelector(".kpi"); if(k){ l=k.querySelector(".l").textContent; val=k.querySelector(".v").textContent; } else { l="Answer"; val=(out.textContent||"").trim().slice(0,60); } }
+  $("ans_l").textContent=l; $("ans_v").textContent=val;
+}
+$("ans_go").addEventListener("click",()=>$(OUTS[activeTab()]).scrollIntoView({behavior:"smooth",block:"start"}));
+document.querySelectorAll("#nav button").forEach(b=>b.addEventListener("click",()=>setTimeout(updateBar,0)));
+document.querySelectorAll('main input, main select').forEach(e=>{ if(!e.closest('.ptable')) e.addEventListener('input',calcAll); });
+drawR(); drawN(); paintYN(); calcAll(); openHash();
+if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
