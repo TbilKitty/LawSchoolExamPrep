@@ -48,7 +48,3 @@ Writing new hypotheticals and grading essays takes an AI model. Without AI mode,
 - Old `.doc` files need to be saved as `.docx`.
 - Heading detection uses Word heading styles, or larger or numbered lines in PDFs. Outlines with unusual formatting may come in as fewer topics.
 - Starter packs are based on the Code and Treasury Regulations, not on any particular course's materials.
-
-## Partnership Tax Calculator
-
-A separate home-screen app lives in `partnership-calculator/`: yes/no questions for outside and inside basis, capital accounts, and recourse and nonrecourse liabilities, with each step and its Code or Regulation cite. Open `https://tbilkitty.github.io/LawSchoolExamPrep/partnership-calculator/` on your phone and use **Add to Home Screen**. It works offline after the first visit.
