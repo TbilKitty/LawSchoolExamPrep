@@ -9,35 +9,34 @@ A phone-first study app for law school exams. You load your own outline (PDF or 
 3. Open that address in **Safari** on your iPhone.
 4. Tap **Share**, then **Add to Home Screen**. The app opens full-screen and works offline after the first visit.
 
-## Where questions come from
+## Memory Bank
 
-| Source | Needs | What you get |
+Tap **Add to Memory Bank**, pick a PDF, Word (.docx), Markdown or text outline, or a question bank (.json or .csv with an answer key). Choose the course, edit the title, and tap **Save to Memory Bank**. The app keeps the original file and its readable text on the phone (IndexedDB), grouped by course (Partnership Tax, Business Organizations, Bar Prep, or a new one). Open any saved item to read its text, open the original file, rename it, move it, replace the file, or delete it.
+
+## Practice
+
+| Mode | Needs | What you get |
 |---|---|---|
-| **Your outline** (always on) | Nothing; it runs on the phone | Fill-in-the-blank questions built from your outline's own sentences. Wrong answers are other terms, cites and figures from the same outline. Each explanation quotes your outline and gives the heading and page. Sections too thin for a fair question are skipped, and the app tells you why. Written practice is a rule drill checked against your outline's key terms. |
-| **Quiz packs** (.json or .csv) | A file | Questions with practice hypotheticals, explanations for every wrong answer, and essay prompts with model answers. Two starter packs are built in. Use `packs/template.json` or `packs/template.csv` to write your own, or ask Claude to write one from your outline. |
-| **AI mode** (optional) | Your own Anthropic API key, entered in Settings | Practice hypotheticals written from your outline, and graded essay feedback (Issue, Rule, Application, Conclusion). The key is stored only in your phone's browser and is never part of this repo. API use is billed to your Anthropic account. |
+| **Basis Math** | Nothing; works offline | Partnership tax calculations with fresh numbers, one-step problems first, then multistep: initial outside basis, inside basis (§ 723), debt share up and down, year-end basis, the § 704(d) loss limit, distributions over basis, and outside basis vs. inside basis vs. § 704(b) book capital vs. tax capital. The math is shown line by line. Every problem is checked before it appears: the steps must equal the answer and there must be exactly one correct choice. **Try With New Numbers** keeps the rule and swaps the figures. |
+| **Multiple Choice** | AI mode (your Anthropic API key) | Fact-pattern questions written from your saved outlines. Four choices, one best answer, and an explanation attached to every choice. Questions are dropped if a choice is only a citation, a dollar answer's arithmetic doesn't check out, or anything cites a statute or regulation that isn't in your outline. |
+| **Short Essay** | AI mode | A short fact pattern, then a model answer and a scoring checklist after you submit or tap **Reveal Answer**. With AI mode on, your written answer is graded too. |
+| **Mixed Practice** | AI mode | Multiple choice plus a short essay, with Basis Math added for Partnership Tax. |
+| **Practice Existing Questions** | A question bank | Your bank's questions with its own answer key. |
 
-Writing new hypotheticals and grading essays takes an AI model. Without AI mode, the app sticks to what it can do reliably on the phone: questions built from your outline's sentences, packs you load, and self-check essay feedback.
+**Quick 5** on the home screen starts five questions from the course you used last. Every generated set is saved under **Saved sets** to replay or review with all answers, offline. Leaving mid-set saves your place.
 
-## Features
-
-- Sessions: Quick MC (5, 10 or 15 questions), Essay (1–3 prompts, optional 5/10/15-minute timer), or Mixed.
-- Pause, resume or end a session at any time; it's saved automatically.
-- Correct answers: about one second of falling gold coins and bills, plus a coin chime. Wrong answers: a cartoon ink splat, then a calm explanation.
-- Settings: sound, wrong-answer sound (off by default), animations, reduced motion, text size.
-- Read aloud for questions and explanations.
-- Flag, Save and Review again lists. Missed questions are added to Review again automatically.
-- Accuracy by topic and an end-of-session summary with a suggested next step.
-- Backup and restore your data as a file.
+After every multiple-choice answer you see the correct choice in full, why it's right, why your choice was wrong and when that reasoning would work, the rule in plain English, the fact that triggers it, the math or application, and the reference underneath. The other choices' explanations are under **Why the other choices are wrong**. A **Next Question** button sits under the explanation and stays in the bottom bar while you scroll.
 
 ## Files
 
 - `index.html`, `styles.css`: layout and look
 - `js/app.js`: screens, sessions and storage
 - `js/parse.js`: reads PDF (with bundled pdf.js), DOCX (no library) and TXT outlines and finds headings
-- `js/gen.js`: builds questions from outline sentences
+- `js/gen.js`: outline text helpers (key-term check for essays)
 - `js/fx.js`: effects, sounds (generated in the browser, no audio files) and read aloud
-- `js/ai.js`: optional AI mode
+- `js/ai.js`: AI mode and the checks applied to everything it writes
+- `js/math.js`: Basis Math problems and their checks
+- `js/db.js`: Memory Bank storage on the phone (IndexedDB)
 - `sw.js`, `manifest.webmanifest`, `icons/`: offline support and the Home Screen icon
 - `packs/`: starter packs and templates
 - `vendor/pdfjs/`: Mozilla pdf.js, Apache License 2.0

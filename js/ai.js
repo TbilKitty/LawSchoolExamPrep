@@ -1,25 +1,24 @@
 // Optional AI mode. Calls the Anthropic API straight from the phone using a key
 // the user typed into Settings. The key lives only in this browser's storage.
+// Everything the AI writes is checked here before it is shown.
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
 async function call(settings, system, user, maxTokens = 2500) {
   if (!settings.aiKey) throw new Error('Add your API key in Settings first.');
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': settings.aiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: settings.aiModel || 'claude-sonnet-5-5',
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: user }]
-    })
-  });
+  let res;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': settings.aiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({ model: settings.aiModel || 'claude-sonnet-5-5', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] })
+    });
+  } catch (e) { throw new Error('Couldn\'t reach the AI service. Check your connection; saved sets and Basis Math work offline.'); }
   if (!res.ok) {
     let msg = `The AI service returned an error (${res.status}).`;
     try { const j = await res.json(); if (j.error && j.error.message) msg += ' ' + j.error.message; } catch (e) { /* ignore */ }
@@ -34,59 +33,149 @@ function extractJSON(text) {
   const start = text.search(/[[{]/);
   if (start < 0) throw new Error('The AI reply had no data in it.');
   const open = text[start], close = open === '[' ? ']' : '}';
-  const end = text.lastIndexOf(close);
-  return JSON.parse(text.slice(start, end + 1));
+  return JSON.parse(text.slice(start, text.lastIndexOf(close) + 1));
 }
 
-const GROUND = `You write law school study questions strictly from the outline excerpt you are given.
-Rules you must follow:
-- Use only rules, thresholds, examples and citations that appear in the excerpt. Never add a Code section, regulation, number or rule that the excerpt does not state.
-- Any facts you make up for a scenario are a practice hypothetical; mark them with "hypothetical": true.
-- Every item must name the exact excerpt heading it relies on in "heading".
-- If the excerpt does not support a reliable question, return {"skip": true, "reason": "..."} instead.
-- Plain, short sentences. Reply with JSON only.`;
+// ---------- checks ----------
+const norm = s => String(s || '').toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
+
+// Section/regulation numbers mentioned in a piece of text, e.g. "704(d)", "1.752-2".
+function citeNumbers(text) {
+  const out = [];
+  const t = String(text || '');
+  for (const m of t.matchAll(/(?:§§?|sec(?:tion)?\.?|irc|i\.r\.c\.)\s*(\d{1,4}[a-z]?(?:\([a-z0-9]+\))*)/gi)) out.push(m[1].toLowerCase());
+  for (const m of t.matchAll(/\b(1\.\d{3,4}[a-z]?-\d+[a-z]?)/gi)) out.push(m[1].toLowerCase());
+  for (const m of t.matchAll(/rev\.?\s*rul\.?\s*(\d{2,4}-\d+)/gi)) out.push(m[1].toLowerCase());
+  return out;
+}
+function supported(numbers, excerpt) {
+  const ex = norm(excerpt).replace(/\s+/g, '');
+  return numbers.every(n => ex.includes(n.replace(/\s+/g, '')) || ex.includes(n.split('(')[0]));
+}
+// A choice that is only a citation ("§ 752(b)", "Treas. Reg. § 1.704-1") isn't an answer.
+function bareCite(text) {
+  if (!/(§|\bsec(tion)?\.?\s*\d|\birc\b|i\.r\.c\.|\breg(ulation)?s?\.?\s*§?\s*\d|rev\.?\s*rul|treas\.)/i.test(String(text))) return false;
+  const rest = String(text).replace(/(§§?|irc|i\.r\.c\.|treas\.?|reg(ulation)?s?\.?|section|sec\.|rev\.?\s*rul\.?|code)/gi, ' ').replace(/[\d().,;:\-–§&]+/g, ' ');
+  return rest.split(/\s+/).filter(w => /[a-z]{3,}/i.test(w)).length < 2;
+}
+const moneyVal = s => { const m = String(s).trim().match(/^(−|-)?\$\s?([\d,]+(?:\.\d+)?)/); return m ? (m[1] ? -1 : 1) * parseFloat(m[2].replace(/,/g, '')) : null; };
+function evalCalc(expr) {
+  const e = String(expr || '').replace(/[$,]/g, '').replace(/−/g, '-').replace(/\bmin\b/gi, 'Math.min').replace(/\bmax\b/gi, 'Math.max');
+  if (!/^[\d\s+\-*/().,]*$/.test(e.replace(/Math\.(min|max)/g, ''))) return null;
+  try { const v = Function('"use strict";return (' + e + ')')(); return isFinite(v) ? v : null; } catch (x) { return null; }
+}
+
+const GROUND = `You write law school practice questions from a student's outline so they can learn on their phone without looking anything up.
+Rules:
+- Test rules the excerpt states. Write a short fact pattern and ask what happens. Every answer choice must be an outcome the student reasons to: a result, an amount, which party, yes or no with the reason, the character or timing of income. Never make a choice that is only a statute or section number. No "all of the above" or "none of the above".
+- Exactly one best answer and three plausible wrong answers that reflect real mistakes students make.
+- Explain every choice. Correct choice: why it is right. Wrong choice: what it gets wrong, and in "whenRight" the different facts under which that reasoning would work, or "" if none.
+- "rule": the governing rule in plain English a student understands without the statute in front of them. "keyFact": the specific fact in the question that makes the rule apply. "application": how the rule applies to these facts.
+- "cite": only a statute, regulation, case, or heading that appears in the excerpt, written as it appears there; otherwise "". Never cite anything the excerpt doesn't contain, in any field.
+- If the answer is a dollar amount, include "steps" (each calculation line in words and numbers) and "calc" (one arithmetic expression using only numbers, + - * / ( ), min(a,b), max(a,b) that equals the correct amount).
+- If the excerpt is too thin to support a question with a definite, reliable answer, return {"skip": true, "reason": "..."} for that item instead.
+- Reply with JSON only.`;
 
 export async function testKey(settings) {
   const out = await call(settings, 'Reply with the single word OK.', 'ping', 10);
   return /ok/i.test(out);
 }
 
-export async function aiMultipleChoice(settings, sections, count) {
-  const excerpt = sections.map(s => `## ${s.heading}${s.page ? ` (p. ${s.page})` : ''}\n${s.text.slice(0, 5000)}`).join('\n\n').slice(0, 16000);
-  const user = `Outline excerpt:\n\n${excerpt}\n\nWrite ${count} multiple-choice questions as a JSON array. Each item:
-{"heading": "...", "hypothetical": true|false, "facts": [["label","value"],...] or [], "prompt": "...", "choices": ["","","",""], "correct": 0-3,
- "rule": "the governing rule, restated from the excerpt", "application": "how the rule applies to these facts", "takeaway": "one-line memory hook",
- "whyWrong": ["why choice A fails or null if correct", "...", "...", "..."], "quote": "short phrase copied from the excerpt that supports the answer"}
-One best answer; distractors must be plausible mistakes a student would make. If you can write fewer than ${count} reliable questions, write fewer.`;
-  const items = extractJSON(await call(settings, GROUND, user, 4000));
-  if (!Array.isArray(items)) return { questions: [], skipped: items.reason || 'The AI said the outline didn\'t support questions here.' };
-  const qs = [];
-  items.forEach((it, i) => {
-    const sec = sections.find(s => s.heading.trim().toLowerCase() === String(it.heading || '').trim().toLowerCase()) || (sections.length === 1 ? sections[0] : null);
-    if (!sec || !Array.isArray(it.choices) || it.choices.length < 2 || typeof it.correct !== 'number' || !it.choices[it.correct]) return;
-    if (it.quote && !sec.text.toLowerCase().includes(String(it.quote).toLowerCase().slice(0, 40))) return; // must be grounded
-    qs.push({
-      id: 'ai_' + Date.now().toString(36) + '_' + i, type: 'mc', origin: 'ai', topic: sec.heading, topicId: sec.id, sourceId: sec.sourceId,
-      prompt: it.prompt, facts: Array.isArray(it.facts) ? it.facts : [], hypothetical: !!it.hypothetical,
-      choices: it.choices, correct: it.correct,
-      explain: { rule: it.rule || '', application: it.application || '', takeaway: it.takeaway || '' },
-      whyWrong: Array.isArray(it.whyWrong) ? it.whyWrong : [],
-      source: { outline: sec.sourceTitle, heading: sec.heading, page: sec.page ? 'p. ' + sec.page : '', quote: it.quote || '' }
+function excerptOf(sections, per = 3500, total = 15000) {
+  return sections.map(s => `## ${s.heading}${s.page ? ` (p. ${s.page})` : ''}\n${s.text.slice(0, per)}`).join('\n\n').slice(0, total);
+}
+
+function buildMC(it, sections, excerpt, i) {
+  const sec = sections.find(s => norm(s.heading) === norm(it.heading)) || sections.find(s => norm(it.heading).includes(norm(s.heading)) || norm(s.heading).includes(norm(it.heading))) || (sections.length === 1 ? sections[0] : null);
+  if (!sec || it.skip) return { reason: it.reason || 'not tied to a heading' };
+  const ch = Array.isArray(it.choices) ? it.choices.filter(c => c && String(c.text || '').trim()) : [];
+  if (ch.length !== 4) return { reason: 'needs four choices' };
+  if (ch.filter(c => c.correct === true).length !== 1) return { reason: 'needs exactly one correct choice' };
+  if (new Set(ch.map(c => norm(c.text))).size !== 4) return { reason: 'duplicate choices' };
+  if (ch.some(c => bareCite(c.text))) return { reason: 'a choice was only a citation' };
+  if (ch.some(c => !String(c.explanation || '').trim())) return { reason: 'a choice had no explanation' };
+  if (!it.rule || !it.prompt) return { reason: 'missing rule or question' };
+  if (it.quote && !norm(sec.text).includes(norm(it.quote).slice(0, 40))) return { reason: 'its supporting quote isn\'t in your outline' };
+  const allText = [it.prompt, it.rule, it.application, it.keyFact, it.takeaway, ...(it.steps || []), ...ch.flatMap(c => [c.text, c.explanation, c.whenRight])].join(' ');
+  if (!supported(citeNumbers(allText), excerpt)) return { reason: 'it cited something your outline doesn\'t contain' };
+  const right = ch.find(c => c.correct);
+  const amt = moneyVal(right.text);
+  if (amt !== null) {
+    const v = evalCalc(it.calc);
+    if (v === null || Math.abs(v - amt) > 0.5) return { reason: 'its arithmetic didn\'t check out' };
+  }
+  let cite = String(it.cite || '').trim();
+  if (cite && !(supported(citeNumbers(cite), excerpt) && (citeNumbers(cite).length || norm(excerpt).includes(norm(cite))))) cite = '';
+  const order = ch.map((c, k) => k);
+  for (let k = order.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [order[k], order[j]] = [order[j], order[k]]; }
+  const sc = order.map(k => ch[k]);
+  return {
+    q: {
+      id: 'ai_' + Date.now().toString(36) + '_' + i + Math.random().toString(36).slice(2, 5), type: 'mc', origin: 'ai',
+      topic: sec.heading, topicId: sec.id, sourceId: sec.sourceId, course: sec.course,
+      prompt: it.prompt, facts: Array.isArray(it.facts) ? it.facts.filter(f => Array.isArray(f)) : [], hypothetical: true,
+      choices: sc.map(c => String(c.text)), correct: sc.findIndex(c => c.correct === true),
+      notes: sc.map(c => ({ why: String(c.explanation || ''), when: String(c.whenRight || '') })),
+      explain: { rule: it.rule, keyFact: it.keyFact || '', application: it.application || '', steps: Array.isArray(it.steps) && amt !== null ? it.steps.map(String) : [], takeaway: it.takeaway || '' },
+      cite, source: { outline: sec.sourceTitle, heading: sec.heading, page: sec.page ? 'p. ' + sec.page : '', quote: it.quote || '' }
+    }
+  };
+}
+
+async function mcBatch(settings, sections, n, focus) {
+  const excerpt = excerptOf(sections);
+  const user = `Outline excerpt:\n\n${excerpt}\n\nWrite ${n} multiple-choice questions${focus ? ` about "${focus}"` : ' spread across these headings'}. Mix rule-application questions with calculation questions where the excerpt has numbers or formulas. JSON array; each item:
+{"heading":"exact heading from the excerpt","facts":[["label","value"]],"prompt":"...",
+ "choices":[{"text":"...","correct":true,"explanation":"why it is right","whenRight":""},{"text":"...","correct":false,"explanation":"what it gets wrong","whenRight":"facts under which it would be right, or empty"}, ...4 total],
+ "rule":"plain English","keyFact":"...","application":"...","takeaway":"one-line memory hook","cite":"","quote":"short phrase copied from the excerpt","steps":[],"calc":""}`;
+  const items = extractJSON(await call(settings, GROUND, user, 7000));
+  return Array.isArray(items) ? items : [items];
+}
+
+// sections: [{id, heading, text, page, sourceId, sourceTitle, course}]
+export async function aiMultipleChoice(settings, sections, count, focus) {
+  const usable = sections.filter(s => (s.text || '').replace(/\s/g, '').length >= 250);
+  if (!usable.length) return { questions: [], skipped: ['The selected material is too thin to support reliable questions. Pick a fuller topic or more outlines.'] };
+  const batches = [];
+  for (let left = count, b = 0; left > 0; left -= 5, b++) {
+    const rot = usable.slice((b * 3) % usable.length).concat(usable.slice(0, (b * 3) % usable.length));
+    batches.push(mcBatch(settings, rot.slice(0, 6), Math.min(5, left) + 1, focus));
+  }
+  const results = await Promise.allSettled(batches);
+  const qs = [], skipped = [];
+  let firstErr = null;
+  results.forEach((r, b) => {
+    if (r.status === 'rejected') { firstErr = firstErr || r.reason; return; }
+    const rot = usable.slice((b * 3) % usable.length).concat(usable.slice(0, (b * 3) % usable.length)).slice(0, 6);
+    const excerpt = excerptOf(rot);
+    r.value.forEach((it, i) => {
+      const out = buildMC(it || {}, rot, excerpt, b * 10 + i);
+      if (out.q) qs.push(out.q); else skipped.push(out.reason);
     });
   });
-  return { questions: qs, skipped: qs.length ? null : 'The AI couldn\'t write questions it could tie to your outline text.' };
+  if (!qs.length && firstErr) throw firstErr;
+  const uniq = []; const seen = new Set();
+  qs.forEach(q => { const k = norm(q.prompt).slice(0, 80); if (!seen.has(k)) { seen.add(k); uniq.push(q); } });
+  const notes = skipped.length ? [`Skipped ${skipped.length} question${skipped.length > 1 ? 's' : ''} that didn't pass the checks (${[...new Set(skipped)].slice(0, 3).join('; ')}).`] : [];
+  return { questions: uniq.slice(0, count), skipped: notes };
 }
 
 export async function aiEssayPrompt(settings, sec) {
-  const user = `Outline excerpt:\n\n## ${sec.heading}\n${sec.text.slice(0, 6000)}\n\nWrite one short issue-spotting practice hypothetical (6-10 sentences of facts, numbers welcome) that can be fully answered using only this excerpt. JSON:
-{"heading":"${sec.heading.replace(/"/g, "'")}","hypothetical":true,"facts":"...","call":"the question the student must answer","issues":["issue 1","issue 2"],"keyTerms":["terms or cites from the excerpt a full answer uses"],"model":"a concise model answer using Issue, Rule, Application, Conclusion"}`;
+  if ((sec.text || '').replace(/\s/g, '').length < 400) throw new Error('This section is too thin for a reliable essay prompt.');
+  const user = `Outline excerpt:\n\n## ${sec.heading}\n${sec.text.slice(0, 6000)}\n\nWrite one short essay practice question (5-8 sentences of facts) fully answerable from this excerpt. JSON:
+{"facts":"...","call":"the question the student must answer","issues":["issue 1","issue 2"],"checklist":["each point a full answer must make, as a checkable line"],"keyTerms":["terms from the excerpt a full answer uses"],"model":"a short model answer (120-200 words) in Issue, Rule, Application, Conclusion form","cite":"only a citation that appears in the excerpt, else empty"}`;
   const it = extractJSON(await call(settings, GROUND, user, 2500));
   if (it.skip) throw new Error(it.reason || 'The AI said this section couldn\'t support an essay prompt.');
+  const all = [it.facts, it.call, it.model, ...(it.checklist || []), ...(it.issues || [])].join(' ');
+  if (!supported(citeNumbers(all), sec.text)) throw new Error('The draft essay cited something your outline doesn\'t contain, so it was skipped.');
+  let cite = String(it.cite || '').trim();
+  if (cite && !supported(citeNumbers(cite), sec.text)) cite = '';
   return {
-    id: 'aie_' + Date.now().toString(36), type: 'essay', origin: 'ai', topic: sec.heading, topicId: sec.id, sourceId: sec.sourceId,
+    id: 'aie_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), type: 'essay', origin: 'ai',
+    topic: sec.heading, topicId: sec.id, sourceId: sec.sourceId, course: sec.course,
     hypothetical: true, prompt: `${it.facts}\n\n${it.call}`,
-    rubric: { issues: it.issues || [], keyTerms: it.keyTerms || [], model: it.model || '' },
-    outlineText: sec.text.slice(0, 2400),
+    rubric: { issues: it.issues || [], checklist: it.checklist || it.issues || [], keyTerms: it.keyTerms || [], model: it.model || '' },
+    outlineText: sec.text.slice(0, 2400), cite,
     source: { outline: sec.sourceTitle, heading: sec.heading, page: sec.page ? 'p. ' + sec.page : '' }
   };
 }
@@ -98,3 +187,6 @@ export async function aiGradeEssay(settings, q, answer) {
 Only point to rules that appear in the excerpt. Be specific and encouraging.`;
   return extractJSON(await call(settings, GROUND, user, 2000));
 }
+
+// exposed for tests
+export const _checks = { bareCite, citeNumbers, supported, evalCalc, buildMC, moneyVal };

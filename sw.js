@@ -1,8 +1,8 @@
 // Offline support: cache the app shell, then serve from cache and refresh in the background.
-const CACHE = 'lsep-v1';
+const CACHE = 'lsep-v2';
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
-  'js/app.js', 'js/parse.js', 'js/gen.js', 'js/fx.js', 'js/ai.js',
+  'js/app.js', 'js/parse.js', 'js/gen.js', 'js/fx.js', 'js/ai.js', 'js/math.js', 'js/db.js',
   'vendor/pdfjs/pdf.min.mjs', 'vendor/pdfjs/pdf.worker.min.mjs',
   'packs/four-accounts.json', 'packs/section-752.json', 'packs/template.json', 'packs/template.csv',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'
