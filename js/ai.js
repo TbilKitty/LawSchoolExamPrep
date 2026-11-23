@@ -58,9 +58,9 @@ function bareCite(text) {
   const rest = String(text).replace(/(§§?|irc|i\.r\.c\.|treas\.?|reg(ulation)?s?\.?|section|sec\.|rev\.?\s*rul\.?|code)/gi, ' ').replace(/[\d().,;:\-–§&]+/g, ' ');
   return rest.split(/\s+/).filter(w => /[a-z]{3,}/i.test(w)).length < 2;
 }
-const moneyVal = s => { const m = String(s).trim().match(/^(−|-)?\$\s?([\d,]+(?:\.\d+)?)/); return m ? (m[1] ? -1 : 1) * parseFloat(m[2].replace(/,/g, '')) : null; };
+const moneyVal = s => { const m = String(s).trim().match(/^(−|-)?\$\s?([\d,]+(?:\.\d+)?)\s?(k\b)?/i); return m ? (m[1] ? -1 : 1) * parseFloat(m[2].replace(/,/g, '')) * (m[3] ? 1000 : 1) : null; };
 function evalCalc(expr) {
-  const e = String(expr || '').replace(/[$,]/g, '').replace(/−/g, '-').replace(/\bmin\b/gi, 'Math.min').replace(/\bmax\b/gi, 'Math.max');
+  const e = String(expr || '').replace(/\$?(\d+(?:\.\d+)?)k\b/gi, (m, n) => String(parseFloat(n) * 1000)).replace(/(\d),(?=\d{3}\b)/g, '$1').replace(/\$/g, '').replace(/−/g, '-').replace(/\bmin\b/gi, 'Math.min').replace(/\bmax\b/gi, 'Math.max');
   if (!/^[\d\s+\-*/().,]*$/.test(e.replace(/Math\.(min|max)/g, ''))) return null;
   try { const v = Function('"use strict";return (' + e + ')')(); return isFinite(v) ? v : null; } catch (x) { return null; }
 }
@@ -74,6 +74,7 @@ Rules:
 - "cite": only a statute, regulation, case, or heading that appears in the excerpt, written as it appears there; otherwise "". Never cite anything the excerpt doesn't contain, in any field.
 - If the answer is a dollar amount, include "steps" (each calculation line in words and numbers) and "calc" (one arithmetic expression using only numbers, + - * / ( ), min(a,b), max(a,b) that equals the correct amount).
 - If the excerpt is too thin to support a question with a definite, reliable answer, return {"skip": true, "reason": "..."} for that item instead.
+- Write dollar amounts in short form: $57k, $2.5k, $500 (not $57,000).
 - Reply with JSON only.`;
 
 export async function testKey(settings) {

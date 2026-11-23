@@ -9,7 +9,18 @@ const NAMES = ['Ana', 'Ben', 'Cora', 'Dev', 'Eli', 'Fay', 'Gus', 'Hana', 'Ivan',
 const r = (min, max, step = 1000) => min + step * Math.floor(Math.random() * (Math.floor((max - min) / step) + 1));
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const name = () => pick(NAMES);
-export const money = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
+// Short dollar format: $57k, $2.5k, $500. Exact for every whole-dollar amount.
+export const money = n => {
+  const a = Math.abs(Math.round(n)), sign = n < 0 && a ? '−$' : '$';
+  if (a < 1000) return sign + a;
+  const k = a / 1000;
+  const txt = a % 10 ? a.toLocaleString('en-US') : (Number.isInteger(k) ? String(k) : String(+k.toFixed(2))) + 'k';
+  return sign + txt;
+};
+export const parseMoney = v => {
+  const m = String(v).trim().match(/^(−|-)?\$([\d,]+(?:\.\d+)?)(k)?$/i);
+  return m ? Math.round((m[1] ? -1 : 1) * parseFloat(m[2].replace(/,/g, '')) * (m[3] ? 1000 : 1)) : null;
+};
 const $ = money;
 const share = n => n === 2 ? 'half' : n === 3 ? 'one-third' : 'one-quarter';
 
@@ -473,6 +484,7 @@ export function makeQuestion(key, opt = {}) {
     const opts = shuffle([{ v: ans, why: g.right, ok: true }, ...wrong]);
     const correct = opts.findIndex(o => o.ok);
     if (opts.filter(o => Math.round(o.v) === ans).length !== 1) continue;       // exactly one correct choice
+    if (new Set(opts.map(o => money(o.v))).size !== 4) continue;               // and four different-looking choices
     return {
       id: `${DRILL_ID}_${key}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
       type: 'mc', origin: 'drill', template: key, variant: g.variant || null, level: T[key].level,
@@ -513,7 +525,7 @@ function shortLabel(l) {
   if (!t) t = String(l || '').replace(/[()]/g, '').trim();
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
-const toNum = v => { const m = String(v).trim().match(/^(−|-)?\$([\d,]+)$/); return m ? (m[1] ? -1 : 1) * +m[2].replace(/,/g, '') : null; };
+const toNum = parseMoney;
 
 export function whyFor(op, label, capMode) {
   const l = String(label).toLowerCase();

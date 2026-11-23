@@ -1,5 +1,5 @@
 // Offline support: cache the app shell, then serve from cache and refresh in the background.
-const CACHE = 'lsep-v3';
+const CACHE = 'lsep-v4';
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/parse.js', 'js/gen.js', 'js/fx.js', 'js/ai.js', 'js/math.js', 'js/db.js',
