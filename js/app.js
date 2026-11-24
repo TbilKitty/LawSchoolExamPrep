@@ -376,11 +376,21 @@ async function quick5() {
 }
 
 // ---------------- screens ----------------
+// Keep page content clear of the fixed bottom bar: pad the page by the bar's real height.
+let dockObs = null;
+function fitDock() {
+  const d = app.querySelector('.dock');
+  const set = () => document.documentElement.style.setProperty('--dock-h', (d ? d.getBoundingClientRect().height : 0) + 'px');
+  set();
+  if (dockObs) dockObs.disconnect();
+  if (d && 'ResizeObserver' in window) { dockObs = new ResizeObserver(set); dockObs.observe(d); }
+}
 function render() {
   if (!ready) { app.innerHTML = '<div class="screen"><p class="muted">Opening your Memory Bank…</p></div>'; return; }
   const r = { home, upload, item, generate, topics, setup, question, summary, review, settingsScreen, viewq, practiceSets, setView }[view.name] || home;
   app.innerHTML = `<div class="screen">${r(view.params)}</div>`;
   bind[view.name] && bind[view.name](view.params);
+  fitDock();
 }
 const bind = {};
 
@@ -740,7 +750,7 @@ function syncReviewButtons(v) {
 }
 
 function mcBody(q) {
-  const facts = q.facts && q.facts.length ? `<table class="facts">${q.facts.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1] ?? '')}</td></tr>`).join('')}</table>` : '';
+  const facts = factsHTML(q.facts);
   const cloze = q.cloze ? `<p style="font-size:1.05em">“${esc(q.cloze.before)}<span class="blank" aria-label="blank"></span>${esc(q.cloze.after)}”</p>` : '';
   return `
     ${q.ask ? `<p class="asks">Asks for: <b>${esc(q.ask)}</b></p>` : ''}
@@ -748,9 +758,49 @@ function mcBody(q) {
     ${q.assumption ? `<p class="small muted">${esc(q.assumption)}</p>` : ''}
     <p style="font-weight:700;font-size:1.08em">${esc(q.prompt)}</p>
     ${cloze}
+    ${isPT(q) ? '<div id="accounts"></div>' : ''}
     ${q.work ? '<div id="work"></div>' : ''}
     <div id="choices">${q.choices.map((c, i) => `<button class="choice" data-i="${i}"><span class="choice-inner"><span class="letter">${L[i]}</span><span>${esc(c)}</span></span></button>`).join('')}</div>
     <div id="feedback" tabindex="-1"></div>`;
+}
+
+// Fact rows: the value never breaks ($44k, None stay whole); the label wraps first,
+// and if there still isn't room the value drops below the label.
+function factsHTML(facts) {
+  if (!facts || !facts.length) return '';
+  return `<div class="facts2">${facts.map(([l, v]) => {
+    const val = String(v ?? '');
+    const long = val.length > 14 && !/^[−-]?\$[\d.,]+k?$/.test(val);
+    return `<div class="frow${long ? ' long' : ''}"><span class="fl">${esc(l)}</span><span class="fv">${esc(val)}</span></div>`;
+  }).join('')}</div>`;
+}
+// Math steps colored by operation: additions green (+$21k), subtractions red (−$9k);
+// starting balance, skipped amounts and the total stay neutral. Running balance on each row.
+function stepsHTML(rich, opts = {}) {
+  if (!rich || !rich.length) return '';
+  const row = (x, i) => {
+    const extra = opts.extra ? opts.extra(x, i) : '';
+    const cls = `ms ms-${x.k}${opts.hit && opts.hit(x) ? ' hit' : ''}`;
+    if (x.k === 'start') return `<li class="${cls}"><span class="ma">${money(x.v)}</span><span class="ml">Start: ${esc(x.label)}</span><span class="mr"></span>${extra}</li>`;
+    if (x.k === 'add') return `<li class="${cls}"><span class="ma">+${money(x.v)}</span><span class="ml">${esc(x.label)}</span><span class="mr">${money(x.total)}</span>${extra}</li>`;
+    if (x.k === 'sub') return `<li class="${cls}"><span class="ma">−${money(x.v).replace('−', '')}</span><span class="ml">${esc(x.label)}${x.of ? ` <span class="muted">(only ${money(x.v)} of the ${money(x.of)}: basis stops at zero)</span>` : ''}</span><span class="mr">${money(x.total)}</span>${extra}</li>`;
+    if (x.k === 'min') return `<li class="${cls}"><span class="ma">min</span><span class="ml">Smaller of ${money(x.before)} and ${money(x.v)} ${esc(x.label)}</span><span class="mr">${money(x.total)}</span>${extra}</li>`;
+    if (x.k === 'skip') return `<li class="${cls}"><span class="ma">${money(x.v)}</span><span class="ml">Skip: ${esc(x.label)}</span><span class="mr"></span>${extra}</li>`;
+    return `<li class="${cls}"><span class="ma"></span><span class="ml">${esc(x.label)}</span><span class="mr">${money(x.total)}</span>${extra}</li>`;
+  };
+  return `<ol class="msteps">${rich.map(row).join('')}</ol>`;
+}
+// Work the Math lines → the same colored rows.
+function workRich(work, run, withTotal) {
+  const out = [];
+  run.lines.forEach((l, i) => {
+    if (i === 0 && work.start) { out.push({ k: 'start', v: work.start.v, label: work.start.label.toLowerCase(), total: work.start.v }); return; }
+    const k = l.op === 'skip' ? 'skip' : l.op === 'cap' ? (work.capMode === 'min' ? 'min' : 'sub') : l.op;
+    const used = l.op === 'cap' && work.capMode !== 'min' ? Math.min(l.v, Math.max(l.before, 0)) : l.v;
+    out.push({ k, v: used, of: k === 'sub' && used < l.v ? l.v : null, before: l.before, label: l.label.toLowerCase(), total: l.total, id: l.id });
+  });
+  if (withTotal) out.push({ k: 'total', label: withTotal, total: run.total });
+  return out;
 }
 
 function ruleHTML(text) { return esc(text).replace(/\[\[(.*?)\]\]/g, '<mark>$1</mark>'); }
@@ -778,7 +828,8 @@ function answerHTML(q, chosen, { live = false } = {}) {
       <div class="section-block take"><h3>Why ${L[q.correct]} is right</h3><p>${esc(notes[q.correct].why)}</p></div>
       ${ex.rule ? `<div class="section-block rule"><h3>The rule</h3><p>${ruleHTML(ex.rule)}</p></div>` : ''}
       ${ex.keyFact ? `<div class="section-block"><h3>The fact that makes it apply</h3><p>${esc(ex.keyFact)}</p></div>` : ''}
-      ${steps ? `<div class="section-block app"><h3>The math</h3><ol class="steps${live && motionOn() ? ' reveal' : ''}">${steps.map((s, i) => `<li style="--d:${i}">${esc(s)}</li>`).join('')}</ol></div>`
+      ${ex.rich ? `<div class="section-block app"><h3>The math</h3><div class="${live && motionOn() ? 'reveal' : ''}">${stepsHTML(ex.rich)}</div></div>`
+        : steps ? `<div class="section-block app"><h3>The math</h3><ol class="steps${live && motionOn() ? ' reveal' : ''}">${steps.map((s, i) => `<li style="--d:${i}">${esc(s)}</li>`).join('')}</ol></div>`
         : ex.application ? `<div class="section-block app"><h3>How it applies</h3><p>${esc(ex.application)}</p></div>` : ''}
       ${ex.takeaway ? `<div class="section-block"><h3>${q.takeawayIsNext ? 'Next line in your outline' : 'Takeaway'}</h3><p>${esc(ex.takeaway)}</p></div>` : ''}
       ${others ? `<details class="others"><summary>Why the other choices are wrong</summary><ul class="why-list">${others}</ul></details>` : ''}
@@ -810,6 +861,77 @@ function essayBody(q) {
     <div id="feedback" tabindex="-1"></div>`;
 }
 
+// ---------- Show the Four Accounts ----------
+const isPT = q => q.sourceId === DRILL_ID || q.course === 'Partnership Tax' || (session && session.course === 'Partnership Tax');
+const ACCT = [
+  { k: 'ob', name: 'Outside basis', whose: 'The partner\'s', tracks: 'The partner\'s tax basis in their partnership interest.', hl: 'ob' },
+  { k: 'ib', name: 'Inside basis', whose: 'The partnership\'s', tracks: 'The partnership\'s tax basis in its assets.', hl: 'ib' },
+  { k: 'book', name: '§ 704(b) book capital', whose: 'The partner\'s capital account', tracks: 'The partner\'s book capital account: their equity, with property recorded at fair market value.', hl: '' },
+  { k: 'tax', name: 'Tax basis capital', whose: 'The partner\'s capital account', tracks: 'The partner\'s capital account measured on a tax basis (adjusted basis, not FMV).', hl: '' }
+];
+const MAYA = {
+  ob: [{ k: 'add', v: 30000, label: 'land\'s adjusted basis', total: 30000 }, { k: 'total', label: 'Maya\'s outside basis', total: 30000 }],
+  ib: [{ k: 'add', v: 30000, label: 'land\'s adjusted basis carries over', total: 30000 }, { k: 'total', label: 'Inside basis in the land', total: 30000 }],
+  book: [{ k: 'add', v: 50000, label: 'land\'s fair market value', total: 50000 }, { k: 'total', label: 'Maya\'s book capital', total: 50000 }],
+  tax: [{ k: 'add', v: 30000, label: 'land\'s adjusted basis', total: 30000 }, { k: 'total', label: 'Maya\'s tax basis capital', total: 30000 }]
+};
+const MAYA_EFFECT = {
+  ob: 'Maya gets a partnership interest. Her basis in it is the land\'s adjusted basis.',
+  ib: 'The partnership takes the land with Maya\'s adjusted basis.',
+  book: 'Her book capital account records the land at fair market value.',
+  tax: 'Her tax basis capital account records the land at adjusted basis.'
+};
+function acctCard(a, body, cls = '') {
+  return `<div class="acard ${a.hl ? 'hl-' + a.hl : ''} ${cls}">
+    <div class="ahead"><b>${esc(a.name)}</b>${cls.includes('asked') ? '<span class="tag asked-tag">This question</span>' : ''}</div>
+    <p class="small whose"><b>Whose number:</b> ${esc(a.whose)}</p>
+    <p class="small"><b>What it tracks:</b> ${esc(a.tracks)}</p>
+    ${body}
+  </div>`;
+}
+function fourAccountsHTML() {
+  const cards = ACCT.map(a => acctCard(a, `<p class="small"><b>In Maya's contribution:</b> ${esc(MAYA_EFFECT[a.k])}</p>${stepsHTML(MAYA[a.k])}`)).join('');
+  const debtOB = [{ k: 'start', v: 30000, label: 'land\'s adjusted basis', total: 30000 }, { k: 'sub', v: 10000, label: 'debt the partnership takes over', total: 20000 }, { k: 'add', v: 5000, label: 'Maya\'s half share of that debt as a partner', total: 25000 }, { k: 'total', label: 'Outside basis', total: 25000 }];
+  const debtTax = [{ k: 'start', v: 30000, label: 'land\'s adjusted basis', total: 30000 }, { k: 'sub', v: 10000, label: 'debt the partnership takes over', total: 20000 }, { k: 'total', label: 'Tax basis capital', total: 20000 }];
+  return `<div class="accounts-panel">
+    <h3>Worked example: Maya contributes land</h3>
+    ${factsHTML([['Land\'s adjusted tax basis', '$30k'], ['Land\'s fair market value', '$50k'], ['Debt', 'None'], ['Other adjustments', 'None']])}
+    <div class="flow" role="img" aria-label="Maya gives the land to the partnership, which takes it with inside basis; the partnership gives Maya an ownership interest, which carries her outside basis.">
+      <div class="party">Maya</div>
+      <div class="arrow hl-ib"><span class="dir">↓</span><span><b>Land</b> moves to the partnership<br><span class="small">$30k basis · $50k FMV</span></span><span class="tag">Inside basis</span></div>
+      <div class="arrow hl-ob"><span class="dir">↑</span><span><b>Ownership interest</b> goes to Maya</span><span class="tag">Outside basis</span></div>
+      <div class="party">Partnership</div>
+    </div>
+    ${cards}
+    <div class="acard">
+      <div class="ahead"><b>Result</b></div>
+      ${factsHTML([['Outside basis', '$30k'], ['Inside basis in the land', '$30k'], ['§ 704(b) book capital', '$50k'], ['Tax basis capital', '$30k']])}
+    </div>
+    <h3>Add debt: outside basis and tax capital split apart</h3>
+    <p class="small">Same land, but it carries <b>$10k</b> of recourse debt the partnership takes over. Maya and Noor share partnership debt equally, so Maya still bears $5k of it as a partner.</p>
+    <div class="acard hl-ob"><div class="ahead"><b>Outside basis</b></div>${stepsHTML(debtOB)}</div>
+    <div class="acard"><div class="ahead"><b>Tax basis capital</b></div>${stepsHTML(debtTax)}</div>
+    <p class="small"><b>They differ by $5k, Maya's share of the debt.</b> Outside basis counts a partner's share of partnership debt; tax basis capital never does. (Book capital is $50k − $10k = $40k; inside basis in the land stays $30k.)</p>
+  </div>`;
+}
+function renderAccounts(q) {
+  const box = document.getElementById('accounts'); if (!box) return;
+  session.acctOpen = session.acctOpen || {};
+  const open = !!session.acctOpen[q.id];
+  box.innerHTML = `<button class="btn acct-btn" id="acct-toggle" aria-expanded="${open}">${open ? 'Hide the Four Accounts' : 'Show the Four Accounts'}</button>${open ? fourAccountsHTML() : ''}`;
+  document.getElementById('acct-toggle').onclick = () => { session.acctOpen[q.id] = !open; save(K.session, session); renderAccounts(q); };
+}
+// After answering: this question's four numbers, with the account it asked about marked.
+function accountsRevealHTML(q) {
+  if (!q.accounts) return '';
+  const A = q.accounts;
+  return `<div class="card">
+    <h2>The four accounts in this question</h2>
+    <p class="small">The question asked for <b>${esc(A.list[A.asked].name)}</b>: ${money(A.list[A.asked].value)}.</p>
+    ${ACCT.map(a => acctCard(a, stepsHTML(A.list[a.k].rich), a.k === A.asked ? 'asked' : '')).join('')}
+  </div>`;
+}
+
 // ---------- Work the Math ----------
 // Optional scratch pad for calculation questions. It runs the steps you choose
 // and shows the running total, but never says whether they're right until you answer.
@@ -838,20 +960,20 @@ function workPanelHTML(q, w, locked) {
       ${idx >= 0 ? `<p class="wchosen small">Step ${idx + 1}: ${OPNAME[w.steps[idx].op]}</p>` : locked ? '<p class="wchosen small muted">Not used</p>' : opBtns('data-op', it.id)}
     </div>`;
   }).join('');
-  const steps = run.lines.map((ln, i) => {
-    const k = work.start ? i - 1 : i;          // index into w.steps (the start line isn't a step)
-    if (k < 0) return `<li class="wstep start"><span>${esc(ln.text)}</span><b>${money(ln.total)}</b></li>`;
-    return `<li class="wstep${ln.skip ? ' skipped' : ''}"><span>${esc(ln.text)}</span><b>${ln.skip ? '' : '= ' + money(ln.total)}</b>
-      ${locked ? '' : (w.editing === k ? `<div class="wedit">${opBtns('data-chg', k)}<button class="btn ghost sm" data-rm="${k}">Remove this step</button></div>`
-        : `<button class="wlink" data-edit="${k}">Change</button>`)}</li>`;
-  }).join('');
+  const offset = work.start ? 1 : 0;           // the start row isn't one of your steps
+  const steps = run.lines.length ? stepsHTML(workRich(work, run), { extra: (x, i) => {
+    const k = i - offset;
+    if (k < 0 || locked) return '';
+    return w.editing === k ? `<div class="wedit">${opBtns('data-chg', k)}<button class="btn ghost sm" data-rm="${k}">Remove this step</button></div>`
+      : `<button class="wlink" data-edit="${k}">Change</button>`;
+  } }) : '';
   const left = work.items.length - usedIds.size;
   return `<details class="work"${w.open || w.steps.length ? ' open' : ''}>
     <summary>Work the Math <span class="muted small">(optional)</span></summary>
     <p class="small muted">Tap an amount's button in the order you'd do the math. The total updates as you go; you'll see how it compares after you answer.${work.capMode ? ' ' + capHelp : ''}</p>
     ${work.start ? `<div class="wstart"><span>Starting balance: ${esc(work.start.label)}</span><b>${money(work.start.v)}</b></div>` : ''}
     <div class="witems">${items}</div>
-    <div class="wsteps"><h3>My steps</h3>${steps ? `<ol>${steps}</ol>` : '<p class="small muted">No steps yet.</p>'}</div>
+    <div class="wsteps"><h3>My steps</h3>${w.steps.length ? steps : (work.start ? steps : '') + '<p class="small muted">No steps yet.</p>'}</div>
     <div class="wtotal"><span>Running total</span><b>${money(run.total)}</b></div>
     ${locked ? '' : `<div class="row wctl"><button class="btn sm" id="w-undo" ${w.hist.length ? '' : 'disabled'}>↶ Undo</button><button class="btn sm" id="w-reset" ${w.steps.length ? '' : 'disabled'}>Reset</button></div>`}
     ${!locked && left === 0 && w.steps.length ? '<p class="small muted">Every amount is used. Pick your answer below.</p>' : ''}
@@ -893,12 +1015,13 @@ function workCompareHTML(q) {
   if (diff) verdict = `<p><b>First difference: ${esc(diff.it.label)} (${money(diff.it.v)}).</b> You ${did[diff.u]}; the rule calls for ${calls[diff.c]}.</p><p>${esc(diff.it.why)}</p>`;
   else if (!same) verdict = '<p><b>Same amounts and operations, different order.</b> The order changes the result here: the Use the Smaller Amount step has to come last, after every increase and distribution, because the limit is measured against what\'s left at that point.</p>';
   else verdict = '<p><b>Your calculation matches.</b></p>';
-  const list = (r, mark) => `<ol class="wcalc">${r.lines.map(l => `<li class="${l.skip ? 'skipped' : ''}${mark && diff && l.id === diff.it.id ? ' hit' : ''}"><span>${esc(l.text)}</span><b>${l.skip ? '' : money(l.total)}</b></li>`).join('')}</ol><p class="wsum">= <b>${money(r.total)}</b></p>`;
+  const hit = x => diff && x.id === diff.it.id;
+  const skipsCorrect = work.items.filter(i => i.op === 'skip').map(i => ({ k: 'skip', v: i.v, label: i.label.toLowerCase(), id: i.id }));
   return `<div class="card work-compare">
     <h2>Your math</h2>
     <div class="wcols">
-      <div><h3>My Calculation</h3>${list(mine, true)}</div>
-      <div><h3>Correct Calculation</h3>${list({ ...right, lines: right.lines.concat(work.items.filter(i => i.op === 'skip').map(i => ({ text: `Skip ${money(i.v)} ${i.label.toLowerCase()}`, skip: true, id: i.id }))) }, true)}</div>
+      <div><h3>My Calculation</h3>${stepsHTML(workRich(work, mine, 'My total'), { hit })}</div>
+      <div><h3>Correct Calculation</h3>${stepsHTML([...workRich(work, right).filter(x => x.k !== 'skip'), ...skipsCorrect, { k: 'total', label: 'Correct total', total: right.total }], { hit })}</div>
     </div>
     ${verdict}
   </div>`;
@@ -920,7 +1043,7 @@ function question() {
     </div>
     ${toolsBar(q)}
     <div class="card" id="qcard">${q.type === 'essay' ? essayBody(q) : mcBody(q)}</div>
-    ${dock(`<div id="dock-main"></div><div class="row"><button class="btn ghost" id="pause">Save and leave</button><button class="btn ghost" id="end">End set</button></div>`)}
+    ${dock(`<div id="dock-main"></div><div class="row dock-sub"><button class="btn ghost" id="pause">Save and leave</button><button class="btn ghost" id="end">End set</button></div>`)}
   `;
 }
 bind.question = () => {
@@ -961,6 +1084,8 @@ bind.question = () => {
       document.getElementById('feedback').innerHTML = answerHTML(q, chosen, { live: true });
       const cmp = workCompareHTML(q);
       if (cmp) document.querySelector('#feedback > .card').insertAdjacentHTML('afterend', cmp);
+      const acc = accountsRevealHTML(q);
+      if (acc) { const cards = document.querySelectorAll('#feedback > .card'); cards[cards.length - 1].insertAdjacentHTML('afterend', acc); }
       const notes = notesOf(q);
       const re = document.getElementById('read-exp');
       if (re) re.onclick = () => speak([`The answer is ${L[q.correct]}. ${q.choices[q.correct]}.`, notes[q.correct].why, (q.explain.rule || '').replace(/\[\[|\]\]/g, ''), ...(q.explain.steps || [q.explain.application || ''])].join(' '));
@@ -974,6 +1099,7 @@ bind.question = () => {
       if (fr) fr.onclick = () => { const v = toggleList('review', q); syncReviewButtons(v); toast(v ? 'Saved for Review' : 'Removed from Review'); };
       nextBtn();
     };
+    renderAccounts(q);
     if (prior) { lock(prior.chosen); return; }
     renderWork(q, false);
     app.querySelectorAll('.choice').forEach(b => b.onclick = () => {
@@ -1121,7 +1247,7 @@ bind.practiceSets = () => {
   });
 };
 function questionReviewHTML(q, n) {
-  const facts = q.facts && q.facts.length ? `<table class="facts">${q.facts.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1] ?? '')}</td></tr>`).join('')}</table>` : '';
+  const facts = factsHTML(q.facts);
   return `<div class="card"><p class="small muted">${n ? n + ' · ' : ''}${esc(q.topic)}</p>${q.ask ? `<p class="asks">Asks for: <b>${esc(q.ask)}</b></p>` : ''}${facts}<p style="white-space:pre-wrap;font-weight:700">${esc(q.prompt)}</p>
     ${q.type === 'mc' ? `<ol class="choice-list" type="A">${q.choices.map((c, i) => `<li class="${i === q.correct ? 'ok' : ''}">${esc(c)}${i === q.correct ? ' ✓' : ''}</li>`).join('')}</ol>` : ''}</div>
     ${q.type === 'mc' ? answerHTML(q, null) : essayAnswerHTML(q)}`;

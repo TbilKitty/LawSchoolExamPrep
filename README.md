@@ -23,6 +23,10 @@ Tap **Add to Memory Bank**, pick a PDF, Word (.docx), Markdown or text outline, 
 | **Mixed Practice** | AI mode | Multiple choice plus a short essay, with Basis Math added for Partnership Tax. |
 | **Practice Existing Questions** | A question bank | Your bank's questions with its own answer key. |
 
+**Show the Four Accounts** (Partnership Tax questions): stacked cards for outside basis, inside basis, § 704(b) book capital and tax basis capital: whose number it is, what it tracks, and a worked example (Maya contributes land: $30k basis, $50k FMV) plus a debt example where outside basis and tax capital split apart. "Which account is it?" questions reveal all four of the question's numbers after you answer.
+
+Math steps are colored by operation everywhere: additions green (+$21k), subtractions red (−$9k), with the running balance on each row.
+
 **Work the Math** (optional, on Basis Math questions): the starting balance if the question gives one, then each dollar amount with large **+ Add**, **− Subtract** and **Skip** buttons (and **Use the Smaller Amount** for capped questions like the § 704(d) loss limit). Tap in any order; change a step, undo or reset; the running total updates as you go without saying whether you're right. After you answer, **My Calculation** and **Correct Calculation** appear side by side with the first step where they differ and why the rule adds, subtracts or leaves that amount out.
 
 **Quick 5** on the home screen starts five questions from the course you used last. Every generated set is saved under **Saved sets** to replay or review with all answers, offline. Leaving mid-set saves your place.

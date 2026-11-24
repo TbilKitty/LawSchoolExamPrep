@@ -209,12 +209,13 @@ T['four-numbers'] = {
     const v = { ob: c + ab - L + sh, ib: ab, book: c + fmv - L, tax: c + ab - L };
     if (v.tax <= 0 || c === L || new Set(Object.values(v)).size < 4) return null;
     const ask = opt.variant || pick(Object.keys(FOUR));
-    const steps = {
+    const allSteps = {
       ob: [['start', c, 'of cash'], ['add', ab, 'adjusted basis of the land'], ['sub', L, 'debt the partnership took over'], ['add', sh, `${a}'s ${share(n)} share of that debt as a partner`]],
       ib: [['start', ab, `adjusted basis of the land (carries over from ${a})`]],
       book: [['start', c, 'of cash'], ['add', fmv, 'fair market value of the land'], ['sub', L, 'debt the partnership took over']],
       tax: [['start', c, 'of cash'], ['add', ab, 'adjusted basis of the land'], ['sub', L, 'debt the partnership took over']]
-    }[ask];
+    };
+    const steps = allSteps[ask];
     const why = {
       ob: { why: 'That is outside basis. It includes the partner\'s share of partnership debt; the capital accounts don\'t.', when: 'Right if the question asked for outside basis.' },
       ib: { why: 'That is the partnership\'s inside basis in the land only. It leaves out the cash and the debt.', when: 'Right if the question asked for the partnership\'s basis in the land.' },
@@ -245,7 +246,35 @@ T['four-numbers'] = {
       ]),
       rule: rules[ask], keyFact: keyFacts[ask],
       takeaway: 'Outside basis = tax capital + debt share. Book uses FMV. Inside basis is the asset\'s own basis.',
-      cite: cites[ask]
+      cite: cites[ask],
+      accounts: { asked: ask, person: a, values: v, steps: allSteps, debtShare: sh }
+    };
+  }
+};
+
+const ACCOUNT_NAMES = { ob: 'Outside basis', ib: 'Inside basis (the partnership\'s basis in the land)', book: '§ 704(b) book capital', tax: 'Tax basis capital' };
+T['which-account'] = {
+  title: 'Which account is it?', level: 2, text: true,
+  make(opt = {}) {
+    const g = T['four-numbers'].make(opt);
+    if (!g) return null;
+    const { asked: k, values: v, person: a, debtShare: sh } = g.accounts;
+    const tell = {
+      ob: `Outside basis counts ${a}'s ${$(sh)} share of the debt the partnership took over; neither capital account does.`,
+      ib: `It equals the land's adjusted basis alone, with no cash or debt: that is the partnership's basis in the land.`,
+      book: `It uses the land's fair market value, which only the § 704(b) book capital account does.`,
+      tax: `It uses adjusted basis and nets the debt without adding back ${a}'s share: tax basis capital.`
+    };
+    return {
+      ...g, variant: k, ask: 'Which account', expect: v[k],
+      prompt: `Right after the contribution, one of the four numbers is ${$(v[k])}. Which account is it?`,
+      choices: Object.keys(ACCOUNT_NAMES).map(x => ({ text: ACCOUNT_NAMES[x], ok: x === k,
+        why: x === k ? `${$(v[k])} is the ${ACCOUNT_NAMES[k].toLowerCase()}. ${tell[k]}` : `The ${ACCOUNT_NAMES[x].split(' (')[0].toLowerCase()} here is ${$(v[x])}, not ${$(v[k])}.`,
+        when: x === k ? '' : `Right if the number had been ${$(v[x])}.` })),
+      rule: 'Outside basis and tax basis capital both start from adjusted basis, but outside basis also includes the partner\'s share of partnership debt. Book capital uses fair market value. Inside basis is the partnership\'s basis in its assets.',
+      keyFact: tell[k],
+      takeaway: 'Debt share → outside basis. FMV → book. Asset alone → inside basis.',
+      cite: 'IRC §§ 722, 723, 752; Treas. Reg. § 1.704-1(b)(2)(iv)(b)'
     };
   }
 };
@@ -464,7 +493,43 @@ export const DRILL_TOPICS = TEMPLATES.map(k => ({ key: k, title: T[k].title, lev
 function shuffle(a) { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
 
 // Build one checked question. Returns null only if 60 tries all fail the checks.
+// Structured steps for colored display: start/add/sub/cap/min, each with the running total.
+export function richOf(steps, ask, ans) {
+  let t = 0; const out = [];
+  for (const [op, v, label] of steps) {
+    const l = String(label || '').replace(/^of\s+/i, '');
+    if (op === 'start') { t = v; out.push({ k: 'start', v, label: l, total: t }); }
+    else if (op === 'add') { t += v; out.push({ k: 'add', v, label: l, total: t }); }
+    else if (op === 'sub') { t -= v; out.push({ k: 'sub', v, label: l, total: t }); }
+    else if (op === 'min') { const nt = Math.min(t, v); out.push({ k: 'min', v, before: t, label: l, total: nt }); t = nt; }
+    else if (op === 'subcap') { const used = Math.min(v, Math.max(t, 0)); out.push({ k: 'sub', v: used, of: used < v ? v : null, before: t, label: l, total: t - used }); t -= used; }
+  }
+  if (ask) out.push({ k: 'total', label: ask, total: ans });
+  return out;
+}
+
 export function makeQuestion(key, opt = {}) {
+  if (T[key].text) {
+    for (let tries = 0; tries < 60; tries++) {
+      const g = T[key].make(opt);
+      if (!g) continue;
+      const opts = shuffle(g.choices);
+      if (opts.filter(o => o.ok).length !== 1) continue;
+      const { total, lines } = runSteps(g.steps);
+      const acc = g.accounts;
+      return {
+        id: `${DRILL_ID}_${key}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        type: 'mc', origin: 'drill', template: key, variant: g.variant, level: T[key].level,
+        topic: T[key].title, sourceId: DRILL_ID, ask: g.ask, hypothetical: true, identify: true,
+        facts: g.facts, prompt: g.prompt,
+        choices: opts.map(o => o.text), notes: opts.map(o => ({ why: o.why, when: o.when || '' })), correct: opts.findIndex(o => o.ok),
+        explain: { rule: g.rule, keyFact: g.keyFact, steps: [...lines, `That is ${money(total)}.`], rich: richOf(g.steps, ACCOUNT_NAMES[acc.asked].split(' (')[0], total), takeaway: g.takeaway },
+        accounts: accountsOf(acc), work: null,
+        source: { outline: 'Basis Math', heading: g.cite }, cite: g.cite
+      };
+    }
+    return null;
+  }
   for (let tries = 0; tries < 60; tries++) {
     const g = T[key].make(opt);
     if (!g) continue;
@@ -493,8 +558,9 @@ export function makeQuestion(key, opt = {}) {
       choices: opts.map(o => money(o.v)),
       notes: opts.map(o => ({ why: o.why, when: o.when || '' })),
       correct,
-      explain: { rule: g.rule, keyFact: g.keyFact, steps: [...lines, `${g.ask} is ${money(ans)}.`], takeaway: g.takeaway },
+      explain: { rule: g.rule, keyFact: g.keyFact, steps: [...lines, `${g.ask} is ${money(ans)}.`], rich: richOf(g.steps, g.ask, ans), takeaway: g.takeaway },
       work: buildWork(g, ans, key),
+      accounts: g.accounts ? accountsOf(g.accounts) : null,
       source: { outline: 'Basis Math', heading: g.cite }, cite: g.cite
     };
   }
@@ -584,7 +650,7 @@ export function runWork(work, steps) {
       : s.op === 'sub' ? `− ${money(it.v)} ${it.label.toLowerCase()}`
       : s.op === 'cap' ? (work.capMode === 'min' ? `Smaller of ${money(before)} and ${money(it.v)} (${it.label.toLowerCase()})` : `− smaller of ${money(it.v)} and ${money(Math.max(before, 0))} (${it.label.toLowerCase()})`)
       : `Skip ${money(it.v)} ${it.label.toLowerCase()}`;
-    lines.push({ text, total: t, skip: s.op === 'skip', id: it.id, op: s.op });
+    lines.push({ text, total: t, skip: s.op === 'skip', id: it.id, op: s.op, v: it.v, label: it.label, before });
   }
   return { total: t, lines };
 }
@@ -619,4 +685,11 @@ function buildWork(g, ans, key) {
   const pos = it => { const i = g.facts.findIndex(f => toNum(f[1]) === it.v); return i < 0 ? 99 : i; };
   work.items = items.slice().sort((a, b) => pos(a) - pos(b));
   return work;
+}
+
+function accountsOf(acc) {
+  const names = { ob: 'Outside basis', ib: 'Inside basis', book: '§ 704(b) book capital', tax: 'Tax basis capital' };
+  const out = { asked: acc.asked, person: acc.person, list: {} };
+  for (const k of Object.keys(names)) out.list[k] = { name: names[k], value: acc.values[k], rich: richOf(acc.steps[k], names[k], acc.values[k]) };
+  return out;
 }
