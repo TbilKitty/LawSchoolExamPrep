@@ -384,3 +384,33 @@ ol.msteps { list-style: none; margin: 4px 0 0; padding: 0; }
 .flow .arrow.hl-ib .dir, .flow .arrow.hl-ib .tag { color: var(--hl-ib); }
 .flow .arrow.hl-ob { border: 2px solid var(--hl-ob); background: rgba(242,177,52,.10); }
 .flow .arrow.hl-ob .dir, .flow .arrow.hl-ob .tag { color: var(--hl-ob); }
+
+/* ---------- Alt Lesson + Open-Book Sprint ---------- */
+.course-actions { display: flex; gap: 8px; margin: 0 0 10px; }
+.course-actions .btn { margin: 0; flex: 1 1 0; }
+.alt-lesson { border-color: #6c74c9; }
+.sprint-bar { position: sticky; top: 56px; z-index: 6; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; padding: 8px 10px; margin: 0 0 10px; border-radius: 12px; background: rgba(29,16,41,.96); border: 1px solid var(--line); }
+.sprint-bar .sb-btns { display: flex; gap: 6px; }
+.sprint-bar .tool { margin: 0; min-height: 44px; }
+#sp-clock { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--gold-2); }
+.facts-sheet { position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 30; background: rgba(15,8,22,.75); padding: 64px 12px 12px; overflow-y: auto; }
+.facts-sheet > .card { max-width: 640px; margin: 0 auto; }
+.facts-card > summary { font-weight: 800; }
+.q-prompt { font-weight: 700; font-size: 1.05em; margin: 8px 0 0; }
+.bigchoices .choice { min-height: 64px; }
+.choice[aria-pressed="true"]:not(:disabled) { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
+.search-card input { width: 100%; font: inherit; color: var(--text); background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-height: var(--tap); }
+details.hit { border-bottom: 1px solid var(--line); padding: 4px 0; }
+details.hit > summary { min-height: 44px; }
+details.hit mark, .sec-text mark { background: rgba(242,177,52,.35); color: inherit; }
+.sec-text { background: var(--bg-2); border-radius: 10px; padding: 8px 10px; margin-top: 8px; max-height: 50vh; overflow-y: auto; }
+.model-sent { font-size: 1.08em; font-weight: 600; }
+.mistake { border-bottom: 1px solid var(--line); padding: 8px 0; }
+.mistake .row .btn { margin: 0; }
+.acard.mv-up { border-left: 5px solid var(--plus); }
+.acard.mv-down { border-left: 5px solid var(--minus); }
+.acard.mv-same { border-left: 5px solid var(--line); }
+.acard .mv { font-size: .8em; font-weight: 800; white-space: nowrap; }
+.acard.mv-up .mv { color: var(--plus); }
+.acard.mv-down .mv { color: var(--minus); }
+.acard.mv-same .mv { color: var(--muted); }

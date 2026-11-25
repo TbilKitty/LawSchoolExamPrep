@@ -3,12 +3,13 @@ import { keywordCheck } from './gen.js';
 import { playCoin, playBonk, moneyRain, inkSplat, speak, stopSpeaking, canSpeak } from './fx.js';
 import { testKey, aiMultipleChoice, aiEssayPrompt, aiGradeEssay } from './ai.js';
 import { DRILL_ID, DRILL_TOPICS, drillQueue, newNumbers, money, runWork, correctSteps } from './math.js';
+import { SCENARIOS, makeScenario, changeOneFact, findHeading, searchOutline, checkSentence, scenarioTitle } from './sprint.js';
 import { kvGet, kvSet, fileGet, fileSet, fileDel, setPut, setDel, setAll, persist } from './db.js';
 
 // ---------------- storage ----------------
 // Small things live in localStorage; the Memory Bank (outlines, question banks,
 // original files) and saved practice sets live in IndexedDB.
-const K = { settings: 'lsep.settings', sources: 'lsep.sources', stats: 'lsep.stats', lists: 'lsep.lists', session: 'lsep.session', history: 'lsep.history', seeded: 'lsep.seeded', courses: 'lsep.courses' };
+const K = { settings: 'lsep.settings', sources: 'lsep.sources', stats: 'lsep.stats', lists: 'lsep.lists', session: 'lsep.session', history: 'lsep.history', seeded: 'lsep.seeded', courses: 'lsep.courses', mistakes: 'lsep.mistakes' };
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } };
 const save = (k, v) => {
   try { localStorage.setItem(k, JSON.stringify(v)); return true; }
@@ -25,6 +26,7 @@ let stats = load(K.stats, {});
 let lists = load(K.lists, { flagged: {}, saved: {}, review: {} });
 let session = load(K.session, null);
 let history = load(K.history, []);
+let mistakes = load(K.mistakes, []);
 let sets = [];
 let ready = false;
 
@@ -212,12 +214,12 @@ async function readUpload(f) {
 }
 
 // ---------------- stats & lists ----------------
-function record(q, correct) {
+function record(q, correct, opts = {}) {
   const key = topicKey(q.sourceId, q.topic);
   const s = stats[key] || { label: q.topic, sourceId: q.sourceId, attempts: 0, correct: 0 };
   s.attempts++; if (correct) s.correct++; s.last = Date.now();
   stats[key] = s; save(K.stats, stats);
-  if (!correct) { lists.review[q.id] = q; save(K.lists, lists); }
+  if (!correct && !opts.statsOnly) { lists.review[q.id] = q; save(K.lists, lists); }
 }
 function toggleList(name, q) {
   if (lists[name][q.id]) delete lists[name][q.id]; else lists[name][q.id] = q;
@@ -387,7 +389,7 @@ function fitDock() {
 }
 function render() {
   if (!ready) { app.innerHTML = '<div class="screen"><p class="muted">Opening your Memory Bank…</p></div>'; return; }
-  const r = { home, upload, item, generate, topics, setup, question, summary, review, settingsScreen, viewq, practiceSets, setView }[view.name] || home;
+  const r = { home, upload, item, generate, topics, setup, question, summary, review, settingsScreen, viewq, practiceSets, setView, sprint, sprintResults }[view.name] || home;
   app.innerHTML = `<div class="screen">${r(view.params)}</div>`;
   bind[view.name] && bind[view.name](view.params);
   fitDock();
@@ -413,7 +415,8 @@ function home() {
         <button class="item-open" data-basis="1"><span class="t-title">Basis Math</span><span class="t-meta">Built in · outside &amp; inside basis, capital accounts, debt, § 704(d), distributions · works offline</span></button>
         <div class="item-actions"><button class="btn primary sm" data-basis="1">Practice Basis Math</button></div></div>` : '';
     if (!items.length && !basis && !DEFAULT_COURSES.includes(c)) return '';
-    return `<section class="course"><h2 class="course-head">${esc(c)}</h2>${basis}${items.map(itemCard).join('') || (basis ? '' : '<p class="small muted">Nothing saved here yet.</p>')}</section>`;
+    const actions = `<div class="course-actions"><button class="btn primary sm" data-start="${esc(c)}">Start Practice</button>${ALT_LESSONS[c] ? `<button class="btn sm alt-lesson" data-alt="${esc(c)}" aria-label="Alt Lesson: ${esc(ALT_LESSONS[c].name)}">Alt Lesson</button>` : ''}</div>`;
+    return `<section class="course"><h2 class="course-head">${esc(c)}</h2>${actions}${basis}${items.map(itemCard).join('') || (basis ? '' : '<p class="small muted">Nothing saved here yet.</p>')}</section>`;
   }).join('');
   return `
     <h1>Ready to practice?</h1>
@@ -432,7 +435,17 @@ bind.home = () => {
   app.querySelectorAll('[data-bank]').forEach(b => b.onclick = () => go('topics', { sourceId: b.dataset.bank }));
   app.querySelectorAll('[data-basis]').forEach(b => b.onclick = () => go('generate', { mode: 'basis', course: 'Partnership Tax' }));
   document.getElementById('quick5').onclick = quick5;
-  const r = document.getElementById('resume'); if (r) r.onclick = () => { session.status = 'active'; save(K.session, session); go('question'); };
+  app.querySelectorAll('[data-alt]').forEach(b => b.onclick = () => ALT_LESSONS[b.dataset.alt].start());
+  app.querySelectorAll('[data-start]').forEach(b => b.onclick = () => {
+    const c = b.dataset.start;
+    const outs = sources.filter(x => x.course === c && x.kind === 'outline');
+    const bank = sources.find(x => x.course === c && x.kind === 'pack');
+    if (outs.length) go('generate', { sourceIds: outs.map(x => x.id), course: c });
+    else if (c === 'Partnership Tax') go('generate', { mode: 'basis', course: c });
+    else if (bank) go('topics', { sourceId: bank.id });
+    else { toast(`Add a ${c} outline to the Memory Bank first.`); go('upload'); }
+  });
+  const r = document.getElementById('resume'); if (r) r.onclick = () => { session.status = 'active'; save(K.session, session); go(session.mode === 'sprint' ? 'sprint' : 'question'); };
   const d = document.getElementById('discard'); if (d) d.onclick = () => finishSession();
 };
 
@@ -794,15 +807,16 @@ function stepsHTML(rich, opts = {}) {
 function workRich(work, run, withTotal) {
   const out = [];
   run.lines.forEach((l, i) => {
-    if (i === 0 && work.start) { out.push({ k: 'start', v: work.start.v, label: work.start.label.toLowerCase(), total: work.start.v }); return; }
+    if (i === 0 && work.start) { out.push({ k: 'start', v: work.start.v, label: lc1(work.start.label), total: work.start.v }); return; }
     const k = l.op === 'skip' ? 'skip' : l.op === 'cap' ? (work.capMode === 'min' ? 'min' : 'sub') : l.op;
     const used = l.op === 'cap' && work.capMode !== 'min' ? Math.min(l.v, Math.max(l.before, 0)) : l.v;
-    out.push({ k, v: used, of: k === 'sub' && used < l.v ? l.v : null, before: l.before, label: l.label.toLowerCase(), total: l.total, id: l.id });
+    out.push({ k, v: used, of: k === 'sub' && used < l.v ? l.v : null, before: l.before, label: lc1(l.label), total: l.total, id: l.id });
   });
   if (withTotal) out.push({ k: 'total', label: withTotal, total: run.total });
   return out;
 }
 
+const lc1 = t => String(t || '').charAt(0).toLowerCase() + String(t || '').slice(1);
 function ruleHTML(text) { return esc(text).replace(/\[\[(.*?)\]\]/g, '<mark>$1</mark>'); }
 
 function reference(q) {
@@ -1016,7 +1030,7 @@ function workCompareHTML(q) {
   else if (!same) verdict = '<p><b>Same amounts and operations, different order.</b> The order changes the result here: the Use the Smaller Amount step has to come last, after every increase and distribution, because the limit is measured against what\'s left at that point.</p>';
   else verdict = '<p><b>Your calculation matches.</b></p>';
   const hit = x => diff && x.id === diff.it.id;
-  const skipsCorrect = work.items.filter(i => i.op === 'skip').map(i => ({ k: 'skip', v: i.v, label: i.label.toLowerCase(), id: i.id }));
+  const skipsCorrect = work.items.filter(i => i.op === 'skip').map(i => ({ k: 'skip', v: i.v, label: lc1(i.label), id: i.id }));
   return `<div class="card work-compare">
     <h2>Your math</h2>
     <div class="wcols">
@@ -1221,6 +1235,389 @@ function summary({ sid }) {
 }
 bind.summary = () => { app.querySelectorAll('[data-setview]').forEach(b => b.onclick = () => go('setView', { id: b.dataset.setview })); };
 
+// ---------- Alt Lessons ----------
+// Alternate lessons, configured per course. The "Alt Lesson" button appears only for
+// courses listed here. To add one for another subject later, add an entry with
+// { name, start } where start() opens that course's lesson.
+const ALT_LESSONS = {
+  'Partnership Tax': { name: 'Open-Book Sprint', start: () => startSprint({}) }
+};
+
+// ---------- Open-Book Sprint ----------
+const SPRINT_STEPS = { normal: ['issue', 'math', 'sentence'], change: ['predict', 'math', 'sentence'] };
+const STEP_NAME = { issue: 'Spot the Issue', predict: 'Predict the Change', math: 'Work the Math', sentence: 'Write the Exam Sentence' };
+const ptOutlines = () => sources.filter(x => x.kind === 'outline' && x.course === 'Partnership Tax');
+
+function startSprint({ key, scen, base, origin = 'new', focus = '', redoOf = null }) {
+  if (!scen) scen = makeScenario(key || SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)]);
+  if (!scen) { toast('Couldn\'t build a sprint. Try again.'); return; }
+  const flow = base ? 'change' : 'normal';
+  session = {
+    id: uid('spr_'), mode: 'sprint', title: 'Open-Book Sprint', course: 'Partnership Tax', sourceId: 'sprint',
+    queue: [scen], idx: 0, answers: [], status: 'active', startedAt: Date.now(),
+    sprint: { flow, step: 0, origin, focus, redoOf, base: base || null, issue: {}, predict: {}, math: {}, sentence: {}, timerEnd: null, missed: [] }
+  };
+  save(K.session, session);
+  settings.lastCourse = 'Partnership Tax'; saveSettings();
+  go('sprint');
+}
+function sprintPhase() { const sp = session.sprint; return SPRINT_STEPS[sp.flow][sp.step]; }
+function saveMistake(phase, decision) {
+  const sc = session.queue[0], sp = session.sprint;
+  if (sp.missed.some(m => m.phase === phase)) return;
+  const m = { id: uid('mis_'), course: 'Partnership Tax', key: sc.key, phase, decision, person: sc.person, at: Date.now() };
+  sp.missed.push(m); mistakes.unshift(m); mistakes = mistakes.slice(0, 60);
+  save(K.mistakes, mistakes); save(K.session, session);
+}
+function redoMistake(id) {
+  const m = mistakes.find(x => x.id === id); if (!m) return;
+  if (m.phase === 'predict') {
+    const base = makeScenario(m.key); const ch = base && changeOneFact(base);
+    if (ch) return startSprint({ scen: ch, base, origin: 'redo', focus: m.decision, redoOf: m.id });
+  }
+  startSprint({ key: m.key, origin: 'redo', focus: m.decision, redoOf: m.id });
+}
+function mistakesCard() {
+  return `<div class="card"><h2>Redo My Mistake <span class="muted small">(${mistakes.length})</span></h2>
+    ${mistakes.length ? mistakes.slice(0, 20).map(m => `<div class="mistake"><p><b>${esc(m.decision)}</b><br><span class="small muted">${esc(scenarioTitle(m.key))} · ${dateStr(m.at)}</span></p>
+      <div class="row"><button class="btn primary sm" data-redo="${esc(m.id)}">Redo with new facts</button><button class="btn ghost sm" data-mdel="${esc(m.id)}">Remove</button></div></div>`).join('')
+      : '<p class="muted small">Decisions you miss in an Open-Book Sprint are saved here so you can practice them again with different facts.</p>'}</div>`;
+}
+
+function sprintBar(sp) {
+  const steps = SPRINT_STEPS[sp.flow];
+  return `<div class="sprint-bar">
+    <span class="small"><b>Step ${sp.step + 1} of ${steps.length}</b> · ${STEP_NAME[steps[sp.step]]}</span>
+    <span class="sb-btns"><button class="tool" id="sp-facts" aria-expanded="false">📋 Facts</button><button class="tool" id="sp-timer" aria-pressed="${!!sp.timerEnd}">${sp.timerEnd ? '<span id="sp-clock">5:00</span>' : '⏱ 5-min timer'}</button></span>
+  </div>`;
+}
+function factsCard(sc, open = true) {
+  return `<details class="card facts-card"${open ? ' open' : ''}><summary>The facts</summary>${factsHTML(sc.facts)}<p class="q-prompt">${esc(sc.prompt)}</p></details>`;
+}
+function bigChoices(list, picked, attr, locked, correct) {
+  return `<div class="bigchoices">${list.map((c, i) => {
+    let cls = 'choice';
+    if (locked && i === correct) cls += ' correct'; else if (locked && i === picked) cls += ' wrong';
+    return `<button class="${cls}" ${attr}="${i}" aria-pressed="${i === picked}" ${locked ? 'disabled' : ''}><span class="choice-inner"><span class="letter">${L[i]}</span><span>${esc(c)}</span></span></button>`;
+  }).join('')}</div>`;
+}
+function outlineRefHTML(sc) {
+  const outs = ptOutlines();
+  const phrase = sc.issue.search[0];
+  if (!outs.length) return `<div class="section-block"><h3>Find it in your outline</h3><p class="small">Search phrase: <b>“${esc(phrase)}”</b>. Save your Partnership Tax outline to the Memory Bank to search it right here.</p></div>`;
+  const h = findHeading(outs, sc.issue.keywords, sc.issue.search);
+  if (!h) return `<div class="section-block"><h3>Find it in your outline</h3><p class="small">No heading in your saved outline clearly matches. Search it for <b>“${esc(phrase)}”</b>.</p></div>`;
+  return `<div class="section-block"><h3>In your outline</h3><p><b>${esc(h.heading)}</b>${h.page ? ` <span class="small muted">p. ${h.page}</span>` : ''}<br><span class="small muted">${esc(h.outline)}</span></p>
+    <p class="small">Search phrase: <b>“${esc(phrase)}”</b></p>
+    <button class="btn sm" data-opensec="${esc(h.sourceId)}|${esc(h.sectionId)}">Open this section</button><div class="sec-text" id="sec-${esc(h.sectionId)}" hidden></div></div>`;
+}
+function bindOpenSections(root) {
+  root.querySelectorAll('[data-opensec]').forEach(b => b.onclick = () => {
+    const [sid, secId] = b.dataset.opensec.split('|');
+    const sec = (getSource(sid) || { sections: [] }).sections.find(x => x.id === secId);
+    const box = document.getElementById('sec-' + secId) || b.nextElementSibling;
+    if (!sec || !box) return;
+    box.hidden = !box.hidden;
+    box.innerHTML = `<p class="small" style="white-space:pre-wrap">${esc(sec.text || '(heading only)')}</p>`;
+    b.textContent = box.hidden ? 'Open this section' : 'Close section';
+  });
+}
+function searchPanelHTML(sp) {
+  const outs = ptOutlines();
+  if (!outs.length) return `<div class="card info"><p class="small">No Partnership Tax outline in your Memory Bank yet. Add one to search it here; you can still submit your pick.</p></div>`;
+  return `<div class="card search-card">
+    <h3>Search your outline</h3>
+    <p class="small muted">${outs.map(o => esc(o.title)).join(' · ')}</p>
+    <input id="sp-q" type="search" placeholder="Search headings and text" value="${esc(sp.issue.query || '')}" autocomplete="off" enterkeyhint="search">
+    <div id="sp-results"></div>
+  </div>`;
+}
+function runSearch(sp) {
+  const box = document.getElementById('sp-results'); if (!box) return;
+  const q = sp.issue.query || '';
+  const hits = searchOutline(ptOutlines(), q);
+  const terms = q.toLowerCase().split(/\s+/).filter(t => t.length > 1);
+  const mark = t => { let h = esc(t); terms.forEach(k => { h = h.replace(new RegExp('(' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<mark>$1</mark>'); }); return h; };
+  box.innerHTML = !q.trim() ? '' : hits.length ? hits.map(({ o, sec }) => {
+    const t = sec.text || ''; const i = Math.max(0, t.toLowerCase().indexOf(terms[0] || ''));
+    const snip = t.slice(Math.max(0, i - 60), i + 160);
+    return `<details class="hit"><summary>${mark(sec.heading)}${sec.page ? ` <span class="muted small">p. ${sec.page}</span>` : ''}</summary><p class="small">${snip ? '…' + mark(snip) + '…' : ''}</p><p class="small" style="white-space:pre-wrap">${mark(t)}</p></details>`;
+  }).join('') : '<p class="small muted">No matches. Try a shorter phrase or a section number.</p>';
+}
+
+function sprint() {
+  if (!session || session.mode !== 'sprint') return `<p>No sprint in progress.</p>${dock('<button class="btn primary" data-go="home">Home</button>')}`;
+  const sp = session.sprint, sc = session.queue[0], ph = sprintPhase();
+  const last = sp.step === SPRINT_STEPS[sp.flow].length - 1;
+  let body = '';
+  if (sp.focus) body += `<div class="card gold"><p class="small"><b>Redo:</b> ${esc(sp.focus)}. Fresh facts, same decision.</p></div>`;
+  if (ph === 'issue') {
+    const is = sp.issue;
+    body += factsCard(sc) + `<div class="card"><h2>What is this question testing?</h2>
+      <p class="small muted">${is.first === undefined ? 'Tap your first pick. It\'s saved before you open the outline.' : `First pick saved: <b>${L[is.first]}</b>. Check your outline, then keep or change your pick.`}</p>
+      ${bigChoices(sc.issue.choices, is.pick, 'data-issue', !!is.submitted, sc.issue.correct)}</div>
+      ${is.first !== undefined && !is.submitted ? searchPanelHTML(sp) : ''}`;
+  }
+  if (ph === 'predict') {
+    const pr = sp.predict, base = sp.base;
+    body += `<div class="card gold"><p><b>One fact changed:</b> ${esc(base.change.label)}.</p></div>` + factsCard(sc) +
+      `<div class="card"><h2>Before you calculate</h2><p>${esc(base.predict.q)}</p>${bigChoices(base.predict.choices, pr.pick, 'data-pred', !!pr.submitted, base.predict.correct)}</div>`;
+  }
+  if (ph === 'math') {
+    body += factsCard(sc) + `<div class="card"><p class="asks">Asks for: <b>${esc(sc.ask)}</b></p><p class="q-prompt">${esc(sc.prompt)}</p>
+      <div id="accounts"></div><div id="work"></div>
+      <p class="small muted">Tap Add, Subtract or Skip for each amount, then submit your running total.</p>
+      <p id="sp-err" class="small" style="color:var(--bad)" hidden>Tap at least one step first.</p></div>`;
+  }
+  if (ph === 'sentence') {
+    const se = sp.sentence;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    body += factsCard(sc, false) + `<div class="card"><h2>Write the exam sentence</h2>
+      <p>In one sentence, tie the decisive fact to the rule and the result.</p>
+      <textarea id="sp-sent" rows="4" placeholder="${esc(sc.person)}'s … because …" ${se.submitted ? 'readonly' : ''}>${esc(se.text || '')}</textarea>
+      ${SR && !se.submitted ? '<button class="btn sm" id="sp-dict">🎤 Dictate</button>' : (!se.submitted ? '<p class="small muted">To dictate, tap the microphone on your keyboard.</p>' : '')}
+      <p id="sp-err" class="small" style="color:var(--bad)" hidden>Write or dictate a sentence first, or tap Reveal.</p></div>`;
+  }
+  return `${sprintBar(sp)}
+    <div class="facts-sheet" id="facts-sheet" hidden><div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">The facts</h2><button class="btn ghost sm" id="fs-close" style="flex:0 0 auto">Close</button></div>${factsHTML(sc.facts)}<p class="q-prompt">${esc(sc.prompt)}</p></div></div>
+    ${body}
+    <div id="feedback" tabindex="-1"></div>
+    ${dock(`<div id="dock-main"></div><div class="row dock-sub"><button class="btn ghost" id="pause">Save and leave</button><button class="btn ghost" id="sp-quit">End sprint</button></div>`)}`;
+}
+
+bind.sprint = () => {
+  if (!session || session.mode !== 'sprint') return;
+  const sp = session.sprint, sc = session.queue[0], ph = sprintPhase();
+  const steps = SPRINT_STEPS[sp.flow], last = sp.step === steps.length - 1;
+  const dockMain = document.getElementById('dock-main');
+  const fb = document.getElementById('feedback');
+  const persist = () => save(K.session, session);
+  document.getElementById('pause').onclick = () => { session.status = 'paused'; persist(); toast('Saved. Pick up from Home anytime.'); go('home'); };
+  document.getElementById('sp-quit').onclick = () => go('sprintResults');
+  // Facts sheet: reopen the fact pattern from anywhere in the step.
+  const sheet = document.getElementById('facts-sheet');
+  document.getElementById('sp-facts').onclick = e => { sheet.hidden = !sheet.hidden; e.currentTarget.setAttribute('aria-expanded', !sheet.hidden); if (!sheet.hidden) sheet.scrollTop = 0; };
+  document.getElementById('fs-close').onclick = () => { sheet.hidden = true; document.getElementById('sp-facts').setAttribute('aria-expanded', 'false'); };
+  // Optional timer
+  const tick = () => {
+    const el = document.getElementById('sp-clock'); if (!el || !sp.timerEnd) return clearInterval(timerHandle);
+    const left = Math.max(0, sp.timerEnd - Date.now());
+    el.textContent = left ? `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}` : 'Time';
+  };
+  document.getElementById('sp-timer').onclick = () => { sp.timerEnd = sp.timerEnd ? null : Date.now() + 5 * 60000; persist(); go('sprint'); };
+  if (sp.timerEnd) { tick(); timerHandle = setInterval(tick, 1000); }
+
+  const showNext = () => {
+    const label = last ? 'See Results' : 'Next';
+    const advance = () => { if (last) { go('sprintResults'); return; } sp.step++; persist(); go('sprint'); };
+    dockMain.innerHTML = `<button class="btn primary" id="next">${label}</button>`;
+    document.getElementById('next').onclick = advance;
+    fb.insertAdjacentHTML('beforeend', `<button class="btn primary big" id="next-inline">${label}</button>`);
+    document.getElementById('next-inline').onclick = advance;
+    document.body.classList.add('answered');
+  };
+  const scrollFb = () => setTimeout(() => { const f = document.getElementById('feedback'); if (f) f.scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'start' }); }, 50);
+
+  // ----- Step 1: Spot the Issue -----
+  if (ph === 'issue') {
+    const is = sp.issue;
+    const feedback = () => {
+      const ok = is.pick === sc.issue.correct;
+      fb.innerHTML = `<div class="card ${ok ? 'ok' : 'bad'}"><h2>${ok ? 'Right issue.' : 'Not quite.'}</h2>
+          <p class="answer-full">The issue: <b>${esc(sc.issue.choices[sc.issue.correct])}</b></p>
+          <p class="small">Your first pick: ${L[is.first]}${is.first === sc.issue.correct ? ' ✓' : ''} · Final pick: ${L[is.pick]}${ok ? ' ✓' : ''}</p></div>
+        <div class="card"><div class="section-block take"><h3>Why</h3><p>${esc(sc.issue.why)}</p></div>
+          ${outlineRefHTML(sc)}
+          <p class="small"><b>Reference:</b> ${esc(sc.cite)}</p></div>`;
+      bindOpenSections(fb);
+      showNext();
+    };
+    if (is.submitted) { feedback(); return; }
+    app.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => {
+      const i = +b.dataset.issue;
+      const firstTime = is.first === undefined;
+      if (firstTime) is.first = i;
+      is.pick = i; persist();
+      if (firstTime) { go('sprint'); return; }
+      app.querySelectorAll('[data-issue]').forEach(x => x.setAttribute('aria-pressed', +x.dataset.issue === i));
+    });
+    if (is.first !== undefined) {
+      const q = document.getElementById('sp-q');
+      if (q) { let h; q.oninput = () => { clearTimeout(h); h = setTimeout(() => { is.query = q.value; persist(); runSearch(sp); }, 200); }; runSearch(sp); }
+      dockMain.innerHTML = '<button class="btn primary" id="sp-submit">Submit my answer</button>';
+      document.getElementById('sp-submit').onclick = () => {
+        is.submitted = true; persist();
+        const ok = is.pick === sc.issue.correct;
+        record({ id: sc.id + '_issue', sourceId: 'sprint', topic: 'Sprint: spotting the issue' }, ok, { statsOnly: true });
+        if (!ok) saveMistake('issue', sc.decisions.issue);
+        dockMain.innerHTML = '';
+        app.querySelectorAll('[data-issue]').forEach(x => { const i = +x.dataset.issue; x.disabled = true; if (i === sc.issue.correct) x.classList.add('correct'); else if (i === is.pick) x.classList.add('wrong'); });
+        const sc2 = document.querySelector('.search-card'); if (sc2) sc2.remove();
+        feedback(); scrollFb();
+      };
+    }
+  }
+
+  // ----- Change One Fact: predict first -----
+  if (ph === 'predict') {
+    const pr = sp.predict, P = sp.base.predict;
+    const feedback = () => {
+      const ok = pr.pick === P.correct;
+      fb.innerHTML = `<div class="card ${ok ? 'ok' : 'bad'}"><h2>${ok ? 'Good call.' : 'Not quite.'}</h2><p class="answer-full"><b>${esc(P.choices[P.correct])}</b></p></div>
+        <div class="card"><div class="section-block take"><h3>Why</h3><p>${esc(P.why)}</p></div><p class="small">Now check it with the numbers.</p></div>`;
+      showNext();
+    };
+    if (pr.submitted) { feedback(); return; }
+    app.querySelectorAll('[data-pred]').forEach(b => b.onclick = () => {
+      pr.pick = +b.dataset.pred; persist();
+      app.querySelectorAll('[data-pred]').forEach(x => x.setAttribute('aria-pressed', +x.dataset.pred === pr.pick));
+      dockMain.innerHTML = '<button class="btn primary" id="sp-submit">Lock in my prediction</button>';
+      document.getElementById('sp-submit').onclick = () => {
+        pr.submitted = true; persist();
+        const ok = pr.pick === P.correct;
+        record({ id: sc.id + '_pred', sourceId: 'sprint', topic: 'Sprint: predicting the change' }, ok, { statsOnly: true });
+        if (!ok) saveMistake('predict', sp.base.decisions.predict);
+        dockMain.innerHTML = '';
+        app.querySelectorAll('[data-pred]').forEach(x => { const i = +x.dataset.pred; x.disabled = true; if (i === P.correct) x.classList.add('correct'); else if (i === pr.pick) x.classList.add('wrong'); });
+        feedback(); scrollFb();
+      };
+    });
+  }
+
+  // ----- Step 2: Work the Math -----
+  if (ph === 'math') {
+    const m = sp.math;
+    const w = workState(sc); if (!m.submitted) { w.open = true; }
+    renderAccounts(sc);
+    const feedback = () => {
+      const ok = m.correct;
+      const outRef = (() => { const outs = ptOutlines(); const h = outs.length ? findHeading(outs, sc.issue.keywords, sc.issue.search) : null; return h ? `<p class="small"><b>Outline:</b> ${esc(h.heading)}${h.page ? `, p. ${h.page}` : ''} <button class="wlink" data-opensec="${esc(h.sourceId)}|${esc(h.sectionId)}">Open</button></p><div class="sec-text" id="sec-${esc(h.sectionId)}" hidden></div>` : ''; })();
+      const acct = sc.accounts.map(a => {
+        const moved = a.same ? 'same' : (a.change !== undefined ? (a.change > 0 ? 'up' : a.change < 0 ? 'down' : 'same') : (a.after > a.before ? 'up' : a.after < a.before ? 'down' : 'same'));
+        const amt = a.before !== null && a.before !== undefined ? `${money(a.before)} → ${money(a.after)}` : a.change ? `${a.change > 0 ? '+' : '−'}${money(Math.abs(a.change))}` : 'No change';
+        return `<div class="acard mv-${moved}"><div class="ahead"><b>${esc(a.name)}</b><span class="mv">${moved === 'up' ? '▲ Changed' : moved === 'down' ? '▼ Changed' : '■ Stayed the same'}</span></div><p class="small"><b>${amt}</b></p><p class="small">${esc(a.note)}</p></div>`;
+      }).join('');
+      fb.innerHTML = `<div class="card ${ok ? 'ok' : 'bad'}"><h2>${ok ? 'Your math checks out.' : 'Not quite.'}</h2>
+          <p class="answer-full">${esc(sc.ask)}: <b>${money(sc.answer)}</b></p><p class="small">Your total: ${money(m.total)}</p></div>
+        ${workCompareHTML(sc)}
+        <div class="card"><div class="section-block rule"><h3>The rule</h3><p>${esc(sc.rule)}</p></div>
+          <h3>Which balances changed</h3>${acct}
+          <div class="ref"><p class="small"><b>Reference:</b> ${esc(sc.cite)}</p>${outRef}</div></div>`;
+      bindOpenSections(fb);
+      showNext();
+    };
+    if (m.submitted) { renderWork(sc, true); feedback(); return; }
+    renderWork(sc, false);
+    dockMain.innerHTML = '<button class="btn primary" id="sp-submit">Submit my calculation</button>';
+    document.getElementById('sp-submit').onclick = () => {
+      const ws = workState(sc);
+      if (!ws.steps.length) { document.getElementById('sp-err').hidden = false; return; }
+      const total = runWork(sc.work, ws.steps).total;
+      m.submitted = true; m.total = total; m.correct = Math.round(total) === Math.round(sc.answer); persist();
+      record({ id: sc.id + '_math', sourceId: 'sprint', topic: 'Sprint: working the math' }, m.correct, { statsOnly: true });
+      if (!m.correct) {
+        // Save the specific decision: the first amount handled differently from the rule.
+        const it = sc.work.order.map(id => sc.work.items.find(i => i.id === id)).find(i => {
+          const mine = (ws.steps.find(x => x.id === i.id) || {}).op || 'none';
+          return !(mine === i.op || (i.op === 'skip' && mine === 'none'));
+        });
+        const verb = { add: 'adding', sub: 'subtracting', skip: 'leaving out', cap: 'using the smaller amount for' };
+        saveMistake('math', it ? `${verb[it.op][0].toUpperCase() + verb[it.op].slice(1)} the ${it.label.charAt(0).toLowerCase() + it.label.slice(1)}` : 'Ordering the steps (the smaller-amount step goes last)');
+      }
+      dockMain.innerHTML = '';
+      renderWork(sc, true);
+      if (m.correct && settings.sound) playCoin();
+      feedback(); scrollFb();
+    };
+  }
+
+  // ----- Step 3: Write the Exam Sentence -----
+  if (ph === 'sentence') {
+    const se = sp.sentence;
+    const ta = document.getElementById('sp-sent');
+    const feedback = () => {
+      const auto = checkSentence(sc, se.text);
+      se.checks = se.checks || { account: auto.account, link: auto.link, result: auto.result };
+      const items = [['account', 'Did I name the right account or issue?'], ['link', 'Did I connect the rule to the fact?'], ['result', 'Did I state the result?']];
+      fb.innerHTML = `<div class="card ok"><h2>Model sentence</h2><p class="model-sent">${esc(sc.sentence.model)}</p></div>
+        <div class="card"><h2>Checklist</h2><p class="small muted">${se.text ? 'Pre-checked from your wording. Adjust if you disagree.' : 'You revealed the answer. Compare it with what you would have written.'}</p>
+          ${items.map(([k, t]) => `<label class="check-row"><input type="checkbox" data-chk="${k}" ${se.checks[k] ? 'checked' : ''}><span>${t}</span></label>`).join('')}
+          ${se.text ? `<p class="small"><b>You wrote:</b> ${esc(se.text)}</p>` : ''}
+          <p class="small"><b>Reference:</b> ${esc(sc.cite)}</p></div>`;
+      fb.querySelectorAll('[data-chk]').forEach(c => c.onchange = () => { se.checks[c.dataset.chk] = c.checked; persist(); });
+      showNext();
+    };
+    if (se.submitted) { feedback(); return; }
+    ta.oninput = () => { se.text = ta.value; document.getElementById('sp-err').hidden = true; persist(); };
+    const d = document.getElementById('sp-dict');
+    if (d) d.onclick = () => {
+      try {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const rec = new SR();
+        rec.lang = 'en-US'; rec.interimResults = false;
+        d.textContent = '● Listening…';
+        rec.onresult = e => { ta.value = (ta.value ? ta.value + ' ' : '') + e.results[0][0].transcript; se.text = ta.value; persist(); };
+        rec.onend = () => { d.textContent = '🎤 Dictate'; };
+        rec.onerror = () => { d.textContent = '🎤 Dictate'; toast('Dictation isn\'t available here. Use the keyboard microphone.'); };
+        rec.start();
+      } catch (e) { toast('Dictation isn\'t available here. Use the keyboard microphone.'); }
+    };
+    dockMain.innerHTML = '<div class="row"><button class="btn primary" id="sp-submit">Submit sentence</button><button class="btn" id="sp-reveal">Reveal</button></div>';
+    const submit = reveal => {
+      se.text = ta.value.trim();
+      if (!se.text && !reveal) { document.getElementById('sp-err').hidden = false; return; }
+      se.submitted = true; se.revealed = !!reveal; persist();
+      ta.readOnly = true; dockMain.innerHTML = '';
+      const dd = document.getElementById('sp-dict'); if (dd) dd.remove();
+      feedback(); scrollFb();
+    };
+    document.getElementById('sp-submit').onclick = () => submit(false);
+    document.getElementById('sp-reveal').onclick = () => submit(true);
+  }
+};
+
+function sprintResults() {
+  if (!session || session.mode !== 'sprint') return `<p>No sprint to show.</p>${dock('<button class="btn primary" data-go="home">Home</button>')}`;
+  const sp = session.sprint, sc = session.queue[0];
+  // Sentence checklist misses are saved as a decision to redo.
+  const se = sp.sentence;
+  if (se.submitted && se.checks && !sp.sentenceLogged) {
+    const miss = [['account', 'naming the right account'], ['link', 'tying the rule to the fact'], ['result', 'stating the result']].filter(([k]) => !se.checks[k]).map(x => x[1]);
+    if (miss.length) saveMistake('sentence', `Exam sentence: ${miss.join(', ')}`);
+    sp.sentenceLogged = true;
+  }
+  // A redo that went cleanly retires the original mistake.
+  if (sp.redoOf && !sp.redoCleared && !sp.missed.length && (sp.math.submitted)) {
+    mistakes = mistakes.filter(m => m.id !== sp.redoOf); save(K.mistakes, mistakes); sp.redoCleared = true;
+  }
+  session.status = 'done'; save(K.session, session);
+  const first = sp.flow === 'change'
+    ? ['Predict the change', sp.predict.submitted ? (sp.predict.pick === sp.base.predict.correct) : null]
+    : ['Spot the issue', sp.issue.submitted ? (sp.issue.pick === sc.issue.correct) : null];
+  const n = se.checks ? Object.values(se.checks).filter(Boolean).length : 0;
+  const mark = v => v === null || v === undefined ? '<span class="muted">skipped</span>' : v ? '<b style="color:var(--ok)">✓</b>' : '<b style="color:var(--bad)">✗</b>';
+  const mins = Math.max(1, Math.round((Date.now() - session.startedAt) / 60000));
+  return `<h1>Sprint done</h1>
+    <p class="muted">${esc(sc.title)} · about ${mins} min</p>
+    <div class="card">
+      <div class="frow"><span class="fl">${first[0]}</span><span class="fv">${mark(first[1])}</span></div>
+      <div class="frow"><span class="fl">Work the math</span><span class="fv">${mark(sp.math.submitted ? sp.math.correct : null)}</span></div>
+      <div class="frow"><span class="fl">Exam sentence checklist</span><span class="fv">${se.submitted ? n + ' of 3' : '<span class="muted">skipped</span>'}</span></div>
+    </div>
+    ${sp.missed.length ? `<div class="card"><h2>Saved to Redo My Mistake</h2>${sp.missed.map(m => `<p class="small">• ${esc(m.decision)}</p>`).join('')}</div>` : ''}
+    <h2>Optional follow-ups</h2>
+    ${sc.change ? `<button class="btn primary" id="sp-change">Change One Fact</button><p class="small muted" style="margin-top:-4px">Same scenario: ${esc(sc.change.label)}. You'll predict the move before calculating.</p>` : ''}
+    ${sp.missed.length ? `<button class="btn" id="sp-redo">Redo My Mistake</button><p class="small muted" style="margin-top:-4px">A fresh problem that practices: ${esc(sp.missed[0].decision.charAt(0).toLowerCase() + sp.missed[0].decision.slice(1))}.</p>` : '<p class="small muted">No mistakes to redo from this sprint.</p>'}
+    ${dock(`<div class="row"><button class="btn" id="sp-again">Another sprint</button><button class="btn ghost" data-go="home">Home</button></div>`)}`;
+}
+bind.sprintResults = () => {
+  const sc = session && session.queue && session.queue[0];
+  const c = document.getElementById('sp-change');
+  if (c) c.onclick = () => { const ch = changeOneFact(sc); if (ch) startSprint({ scen: ch, base: sc, origin: 'change' }); else toast('Couldn\'t change this one.'); };
+  const r = document.getElementById('sp-redo');
+  if (r) r.onclick = () => redoMistake(session.sprint.missed[0].id);
+  const a = document.getElementById('sp-again'); if (a) a.onclick = () => startSprint({});
+};
+
 // ---------- saved practice sets ----------
 function practiceSets() {
   const byCourse = {};
@@ -1268,13 +1665,14 @@ function review() {
   const rows = Object.entries(stats).sort((a, b) => (a[1].correct / a[1].attempts) - (b[1].correct / b[1].attempts));
   const msg = r => r < .6 ? 'Worth another pass. Every miss here is a rule you\'ll recognize next time.' : r < .85 ? 'Getting there. A few more rounds will make this automatic.' : 'Strong. Keep it warm with a short essay now and then.';
   const listCard = (name, label, help) => {
-    const items = Object.values(lists[name]);
+    const items = Object.values(lists[name]).filter(q => q && q.prompt);
     return `<div class="card"><h2>${label} <span class="muted small">(${items.length})</span></h2>
       ${items.length ? items.slice(0, 40).map(q => `<button class="topic" data-viewq="${esc(name)}|${esc(q.id)}"><span class="t-main"><span class="t-title">${esc(q.prompt.length > 90 ? q.prompt.slice(0, 90) + '…' : q.prompt)}</span><span class="t-meta">${esc(q.topic)}</span></span><span aria-hidden="true">›</span></button>`).join('') + `<button class="btn primary" data-practice="${name}">Practice these</button>` : `<p class="muted small">${help}</p>`}</div>`;
   };
   return `
     <h1>Review and progress</h1>
     ${listCard('review', 'Saved for Review', 'Missed questions land here automatically. Tap “Save for Review” on any question to add it.')}
+    ${mistakesCard()}
     ${listCard('flagged', 'Flagged', 'Flag a question with ⚑ to come back to it.')}
     <div class="card"><h2>Accuracy by topic</h2>
       ${rows.length ? rows.map(([k, s]) => { const r = s.correct / s.attempts; return `<p style="margin:8px 0 0"><b>${esc(s.label)}</b> <span class="muted small">· ${s.correct}/${s.attempts} (${pct(s.correct, s.attempts)}%)</span></p><div class="meter ${r < .6 ? 'low' : r < .85 ? 'mid' : 'high'}"><span style="width:${pct(s.correct, s.attempts)}%"></span></div><p class="small muted" style="margin:4px 0 8px">${msg(r)}</p>`; }).join('') : '<p class="muted">Answer a few questions and your topics show up here.</p>'}
@@ -1283,6 +1681,8 @@ function review() {
   `;
 }
 bind.review = () => {
+  app.querySelectorAll('[data-redo]').forEach(b => b.onclick = () => redoMistake(b.dataset.redo));
+  app.querySelectorAll('[data-mdel]').forEach(b => b.onclick = () => { mistakes = mistakes.filter(m => m.id !== b.dataset.mdel); save(K.mistakes, mistakes); go('review'); });
   app.querySelectorAll('[data-viewq]').forEach(b => b.onclick = () => { const [list, id] = b.dataset.viewq.split('|'); go('viewq', { list, id }); });
   app.querySelectorAll('[data-practice]').forEach(b => b.onclick = () => {
     const qs = shuffle(Object.values(lists[b.dataset.practice])).slice(0, 15);

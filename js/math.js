@@ -656,7 +656,7 @@ export function runWork(work, steps) {
 }
 export function correctSteps(work) { return work.order.map(id => ({ id, op: work.items.find(i => i.id === id).op })); }
 
-function buildWork(g, ans, key) {
+export function buildWork(g, ans, key) {
   const st = g.steps;
   if (st.slice(1).some(x => x[0] === 'start')) return null;                     // not a single running total
   const capMode = st.some(x => x[0] === 'min') ? 'min' : st.some(x => x[0] === 'subcap') ? 'subcap' : (CAP_TEMPLATES[key] || null);
